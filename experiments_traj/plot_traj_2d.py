@@ -52,9 +52,26 @@ def load_valid_data(config):
 
 def plot_for_article():
     config = {
-        "PID": {"file": "data_pid_traj.csv", "color": "#1f77b4", "ls": "-"},
-        "MPC": {"file": "data_mpc_traj.csv", "color": "#d62728", "ls": "--"},
-        "PPO": {"file": "data_ppo_traj.csv", "color": "#2ca02c", "ls": "-."},
+        "PID": {
+            "file": "data_pid_traj.csv",
+            "color": "#1f77b4",
+            "ls": "-"
+        },
+        "MPC": {
+            "file": "data_mpc_traj.csv",
+            "color": "#d62728",
+            "ls": "--"
+        },
+        "PPO": {
+            "file": "data_ppo_traj.csv",
+            "color": "#2ca02c",
+            "ls": "-."
+        },
+        "PPO+Energy": {
+            "file": "data_ppo_energy_traj.csv",
+            "color": "#9467bd",
+            "ls": "-"
+        },
     }
 
     dfs = load_valid_data(config)
