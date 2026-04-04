@@ -67,8 +67,8 @@ def plot_for_article():
             "color": "#2ca02c",
             "ls": "-."
         },
-        "PPO+Energy": {
-            "file": "data_ppo_energy_traj.csv",
+        "SMC": {
+            "file": "data_smc_traj.csv",
             "color": "#9467bd",
             "ls": "-"
         },

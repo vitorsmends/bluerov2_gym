@@ -4,56 +4,86 @@ import numpy as np
 class Reward:
     def __init__(
         self,
-        use_energy_penalty=False,
-        w_energy=0.01,
-        action_dim=6,
-        energy_clip=10.0,
+        use_energy_penalty: bool = False,
+        w_energy: float = 0.005,
+        use_smoothness_penalty: bool = True,
+        w_smooth: float = 0.05,
+        action_dim: int = 6,
+        action_clip: float = 10.0,
     ):
-        # Pesos principais
+        # Pesos do objetivo principal
         self.w_pos = 1.0
         self.w_vel = 0.1
         self.w_ang_pos = 0.5
         self.w_stab = 0.5
 
-        # Penalização energética opcional
+        # Penalização de magnitude da ação
         self.use_energy_penalty = use_energy_penalty
         self.w_energy = w_energy
+
+        # Penalização de variação da ação
+        self.use_smoothness_penalty = use_smoothness_penalty
+        self.w_smooth = w_smooth
+
         self.action_dim = action_dim
-        self.energy_clip = energy_clip
+        self.action_clip = action_clip
+
+        # Guarda ação anterior para calcular delta_u
+        self.prev_action = None
+
+    def reset(self):
+        """Chamar no início de cada episódio."""
+        self.prev_action = None
 
     def _to_scalar(self, value):
         if isinstance(value, np.ndarray):
             return float(value.item())
         return float(value)
 
-    def _energy_penalty(self, action):
+    def _prepare_action(self, action):
+        if action is None:
+            return None
+
+        action = np.asarray(action, dtype=float).reshape(-1)
+
+        # proteção contra valores extremos
+        action = np.clip(action, -self.action_clip, self.action_clip)
+        return action
+
+    def _action_l2_penalty(self, action):
         """
-        Penalização por esforço de controle usando ||u||².
-        A penalização é normalizada pelo número de atuadores
-        e limitada por clipping para evitar dominar a reward.
+        Penalização pela magnitude da ação.
+        Usa média quadrática para manter escala estável.
         """
         if action is None:
             return 0.0
 
-        action = np.asarray(action, dtype=float).reshape(-1)
-
-        # Média quadrática da ação
         penalty = np.sum(action ** 2) / max(1, self.action_dim)
+        return float(penalty)
 
-        # Limita o impacto de ações extremas
-        penalty = np.clip(penalty, 0.0, self.energy_clip)
+    def _delta_u_penalty(self, action):
+        """
+        Penalização pela variação da ação entre passos consecutivos.
+        Ajuda a reduzir jitter e comandos agressivos.
+        """
+        if action is None or self.prev_action is None:
+            return 0.0
 
+        delta_u = action - self.prev_action
+        penalty = np.sum(delta_u ** 2) / max(1, self.action_dim)
         return float(penalty)
 
     def get_reward(self, obs, action=None):
         """
         Espera que:
-        - x, y, z sejam erro de posição
-        - u, v, w sejam erro de velocidade
-        - roll, pitch, yaw sejam atitude/erro angular conforme o ambiente
+        - x, y, z representem erro de posição
+        - u, v, w representem erro de velocidade
+        - roll, pitch, yaw representem atitude/erro angular
         """
 
-        # Estados / erros
+        action = self._prepare_action(action)
+
+        # Observações
         x = self._to_scalar(obs["x"])
         y = self._to_scalar(obs["y"])
         z = self._to_scalar(obs["z"])
@@ -69,10 +99,10 @@ class Reward:
         # 1. Erro de posição
         position_error = np.sqrt(x**2 + y**2 + z**2)
 
-        # 2. Penalidade de velocidade
+        # 2. Erro de velocidade
         velocity_penalty = np.sqrt(u**2 + v**2 + w**2)
 
-        # 3. Erro de yaw com wrap em [-pi, pi]
+        # 3. Erro de yaw com wrap
         yaw_error = np.arctan2(np.sin(yaw), np.cos(yaw))
         yaw_error = abs(yaw_error)
 
@@ -87,13 +117,22 @@ class Reward:
             + self.w_stab * stability_penalty
         )
 
-        # 5. Penalização energética opcional
+        # 5. Penalização de energia (magnitude da ação)
         if self.use_energy_penalty:
-            energy_penalty = self._energy_penalty(action)
-            reward -= self.w_energy * energy_penalty
+            action_penalty = self._action_l2_penalty(action)
+            reward -= self.w_energy * action_penalty
 
-        # 6. Bônus de sucesso
+        # 6. Penalização de suavidade (variação da ação)
+        if self.use_smoothness_penalty:
+            smooth_penalty = self._delta_u_penalty(action)
+            reward -= self.w_smooth * smooth_penalty
+
+        # 7. Bônus de sucesso
         if position_error < 0.2:
             reward += 1.0
+
+        # Atualiza ação anterior só no final
+        if action is not None:
+            self.prev_action = action.copy()
 
         return float(reward)
