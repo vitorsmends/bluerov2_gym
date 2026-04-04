@@ -51,56 +51,13 @@ class TrajectoryGenerator:
 
 
 # ==========================================
-# 3. UTILITÁRIOS DE ENERGIA
-# ==========================================
-T200_MAX_THRUST_N = 50.0
-T200_MAX_POWER_W = 350.0
-
-BLUEROV2_LENGTH_M = 0.457
-BLUEROV2_WIDTH_M = 0.338
-HALF_LENGTH = BLUEROV2_LENGTH_M / 2.0
-HALF_WIDTH = BLUEROV2_WIDTH_M / 2.0
-C45 = 1.0 / np.sqrt(2.0)
-YAW_ARM = C45 * (HALF_LENGTH + HALF_WIDTH)
-
-# Matriz simplificada de alocação:
-# surge, sway, heave, yaw -> 6 thrusters
-B_ALLOC = np.array([
-    [ C45,  C45,  C45,  C45, 0.0, 0.0],
-    [-C45,  C45,  C45, -C45, 0.0, 0.0],
-    [ 0.0,  0.0,  0.0,  0.0, 1.0, 1.0],
-    [-YAW_ARM, YAW_ARM, -YAW_ARM, YAW_ARM, 0.0, 0.0],
-], dtype=float)
-
-B_ALLOC_PINV = np.linalg.pinv(B_ALLOC)
-
-
-def estimate_thruster_forces_from_action(action_6d):
-    action_6d = np.asarray(action_6d, dtype=float).reshape(-1)
-    surge, sway, heave, roll, pitch, yaw = action_6d
-    tau_actuated = np.array([surge, sway, heave, yaw], dtype=float)
-    thruster_forces = B_ALLOC_PINV @ tau_actuated
-    return thruster_forces
-
-
-def estimate_thruster_power_watts(action_6d):
-    thruster_forces = estimate_thruster_forces_from_action(action_6d)
-    abs_force = np.abs(thruster_forces)
-    force_ratio = np.clip(abs_force / T200_MAX_THRUST_N, 0.0, 1.0)
-
-    thruster_power = T200_MAX_POWER_W * (force_ratio ** 1.5)
-    total_power = float(np.sum(thruster_power))
-    return total_power
-
-
-# ==========================================
-# 4. AMBIENTE PERSONALIZADO
+# 3. AMBIENTE PERSONALIZADO
 # ==========================================
 class TrajectoryTrackingEnv(original_env.BlueRov):
     def __init__(
         self,
         use_energy_penalty=True,
-        energy_mode="thruster_power",   # "thruster_power" ou "action_l2"
+        energy_mode="action_l2",   # 🔴 MUDANÇA IMPORTANTE
         w_energy=0.1,
     ):
         super().__init__(render_mode=None)
@@ -135,13 +92,9 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         if not self.use_energy_penalty:
             return 0.0
 
+        # 🔴 MODO ESTÁVEL PARA PPO
         if self.energy_mode == "action_l2":
-            return float(np.sum(action ** 2))
-
-        if self.energy_mode == "thruster_power":
-            total_power_w = estimate_thruster_power_watts(action)
-            step_energy_j = total_power_w * self.dt
-            return float(step_energy_j)
+            return float(np.sum(action ** 2) / len(action))
 
         raise ValueError(f"energy_mode inválido: {self.energy_mode}")
 
@@ -195,16 +148,14 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
 
 
 # ==========================================
-# 5. LOOP DE TREINAMENTO
+# 4. LOOP DE TREINAMENTO
 # ==========================================
 def train(
     use_energy_penalty=True,
-    energy_mode="thruster_power",
+    energy_mode="action_l2",
     w_energy=0.1,
 ):
-    print("[INFO] Iniciando treinamento PPO para trajetória...")
-    print(f"[INFO] Penalização energética: {use_energy_penalty}")
-    print(f"[INFO] Modo de energia: {energy_mode}")
+    print("[INFO] Iniciando treinamento PPO ENERGY...")
     print(f"[INFO] Peso energético: {w_energy}")
 
     env = DummyVecEnv([
@@ -215,7 +166,6 @@ def train(
         )
     ])
 
-    # Mudança importante: sem normalização da reward
     env = VecNormalize(env, norm_obs=True, norm_reward=False, clip_obs=10.0)
 
     model = PPO(
@@ -227,25 +177,26 @@ def train(
         batch_size=64,
         gamma=0.99,
         gae_lambda=0.95,
-        tensorboard_log="./ppo_traj_energy_v2_tensorboard/",
+        tensorboard_log="./ppo_traj_energy_tensorboard/",
     )
 
     checkpoint_callback = CheckpointCallback(
         save_freq=50000,
         save_path="./logs/",
-        name_prefix="ppo_traj_energy_v2"
+        name_prefix="ppo_traj_energy"
     )
 
     model.learn(total_timesteps=1_000_000, callback=checkpoint_callback)
 
-    model.save("ppo_trajectory_energy_v2_final")
-    env.save("vec_normalize_energy_v2.pkl")
-    print("[OK] Treino concluído! Modelos salvos.")
+    model.save("ppo_trajectory_energy_final")
+    env.save("vec_normalize_energy.pkl")
+
+    print("[OK] Treino concluído!")
 
 
 if __name__ == "__main__":
     train(
         use_energy_penalty=True,
-        energy_mode="thruster_power",
+        energy_mode="action_l2",
         w_energy=0.1,
     )

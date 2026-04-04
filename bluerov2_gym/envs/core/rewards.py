@@ -6,8 +6,10 @@ class Reward:
         self,
         use_energy_penalty=False,
         w_energy=0.01,
+        action_dim=6,
+        energy_clip=10.0,
     ):
-        # Pesos originais
+        # Pesos principais
         self.w_pos = 1.0
         self.w_vel = 0.1
         self.w_ang_pos = 0.5
@@ -16,23 +18,42 @@ class Reward:
         # Penalização energética opcional
         self.use_energy_penalty = use_energy_penalty
         self.w_energy = w_energy
+        self.action_dim = action_dim
+        self.energy_clip = energy_clip
 
     def _to_scalar(self, value):
-        return value.item() if isinstance(value, np.ndarray) else value
+        if isinstance(value, np.ndarray):
+            return float(value.item())
+        return float(value)
 
     def _energy_penalty(self, action):
         """
-        Penalização simples baseada no esforço dos atuadores.
-        Usa norma quadrática da ação.
+        Penalização por esforço de controle usando ||u||².
+        A penalização é normalizada pelo número de atuadores
+        e limitada por clipping para evitar dominar a reward.
         """
         if action is None:
             return 0.0
 
         action = np.asarray(action, dtype=float).reshape(-1)
-        return float(np.sum(action ** 2))
+
+        # Média quadrática da ação
+        penalty = np.sum(action ** 2) / max(1, self.action_dim)
+
+        # Limita o impacto de ações extremas
+        penalty = np.clip(penalty, 0.0, self.energy_clip)
+
+        return float(penalty)
 
     def get_reward(self, obs, action=None):
-        # Estados
+        """
+        Espera que:
+        - x, y, z sejam erro de posição
+        - u, v, w sejam erro de velocidade
+        - roll, pitch, yaw sejam atitude/erro angular conforme o ambiente
+        """
+
+        # Estados / erros
         x = self._to_scalar(obs["x"])
         y = self._to_scalar(obs["y"])
         z = self._to_scalar(obs["z"])
@@ -51,7 +72,7 @@ class Reward:
         # 2. Penalidade de velocidade
         velocity_penalty = np.sqrt(u**2 + v**2 + w**2)
 
-        # 3. Erro de yaw com wrap
+        # 3. Erro de yaw com wrap em [-pi, pi]
         yaw_error = np.arctan2(np.sin(yaw), np.cos(yaw))
         yaw_error = abs(yaw_error)
 
@@ -71,7 +92,7 @@ class Reward:
             energy_penalty = self._energy_penalty(action)
             reward -= self.w_energy * energy_penalty
 
-        # Bônus de sucesso
+        # 6. Bônus de sucesso
         if position_error < 0.2:
             reward += 1.0
 

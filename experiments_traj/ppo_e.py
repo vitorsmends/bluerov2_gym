@@ -106,10 +106,10 @@ def build_energy_row(t, curr_pos, dist_error, action, thr_forces, thr_power, thr
 
 
 # ==========================================
-# 4. EXECUÇÃO PPO - NOVO AGENTE ENERGÉTICO
+# 4. EXECUÇÃO PPO ENERGY
 # ==========================================
 def run_trajectory_ppo_energy():
-    print("[INFO] Iniciando PPO ENERGY com estimativa de energia...")
+    print("[INFO] Iniciando PPO ENERGY...")
 
     env = gym.make("BlueRov-v0", render_mode=None)
 
@@ -176,7 +176,7 @@ def run_trajectory_ppo_energy():
         thruster_step_energy = thruster_power * dt
         thruster_cum_energy += thruster_step_energy
 
-        obs, _, terminated, _, _ = env.step(action)
+        obs, _, terminated, truncated, _ = env.step(action)
 
         dist_error = np.linalg.norm(error_pos_world)
 
@@ -199,7 +199,7 @@ def run_trajectory_ppo_energy():
                 f"Energia acumulada: {np.sum(thruster_cum_energy):.2f} J"
             )
 
-        if terminated:
+        if terminated or truncated:
             break
 
     with open("data_ppo_energy_traj.csv", "w", newline="") as f:
