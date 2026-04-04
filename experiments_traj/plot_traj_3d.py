@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+
 # ==========================================
 # 1. TRAJETÓRIA DE REFERÊNCIA
 # ==========================================
@@ -11,18 +12,26 @@ def get_reference_trajectory(t_array):
     radius = 1.0
     speed = 0.15
     z_target = -0.5
+
     ref_x, ref_y, ref_z = [], [], []
 
     for t in t_array:
         t_s = t * speed
+
         x_d = radius * math.sin(t_s)
         y_d = radius * math.sin(t_s) * math.cos(t_s)
-        z_d = (z_target / 20.0) * t if t < 20.0 else z_target
+
+        if t < 20.0:
+            z_d = (z_target / 20.0) * t
+        else:
+            z_d = z_target
+
         ref_x.append(x_d)
         ref_y.append(y_d)
         ref_z.append(z_d)
 
     return np.array(ref_x), np.array(ref_y), np.array(ref_z)
+
 
 # ==========================================
 # 2. LEITURA DOS DADOS
@@ -33,94 +42,151 @@ def load_data():
         "MPC": {"file": "data_mpc_traj.csv", "color": "#d62728", "ls": "--"},
         "PPO": {"file": "data_ppo_traj.csv", "color": "#2ca02c", "ls": "-."},
     }
-    required_cols = {"time", "x", "y", "z"}
+
+    required_cols = {"time", "x", "y", "z", "error"}
     dfs = {}
 
     for name, info in config.items():
-        if os.path.exists(info["file"]):
-            df = pd.read_csv(info["file"])
-            if required_cols.issubset(df.columns):
-                dfs[name] = df.sort_values("time").reset_index(drop=True)
-            else:
-                print(f"[AVISO] Colunas ausentes em {name}")
-        else:
-            print(f"[AVISO] Arquivo não encontrado: {info['file']}")
+        file_path = info["file"]
+
+        if not os.path.exists(file_path):
+            print(f"[AVISO] Arquivo não encontrado: {file_path}")
+            continue
+
+        df = pd.read_csv(file_path)
+
+        missing = required_cols - set(df.columns)
+        if missing:
+            print(f"[AVISO] {name} ignorado. Colunas ausentes: {sorted(missing)}")
+            continue
+
+        df = df.sort_values("time").reset_index(drop=True)
+        dfs[name] = df
+
     return dfs, config
+
 
 # ==========================================
 # 3. AJUSTE DE ASPECT RATIO 3D
 # ==========================================
 def set_axes_equal(ax):
-    # Garante que a escala X, Y e Z seja a mesma para não deformar a trajetória
-    limits = np.array([ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d()])
-    origin = np.mean(limits, axis=1)
-    radius = 0.5 * np.max(np.abs(limits[:, 1] - limits[:, 0]))
-    ax.set_xlim3d([origin[0] - radius, origin[0] + radius])
-    ax.set_ylim3d([origin[1] - radius, origin[1] + radius])
-    ax.set_zlim3d([origin[2] - radius, origin[2] + radius])
+    x_limits = ax.get_xlim3d()
+    y_limits = ax.get_ylim3d()
+    z_limits = ax.get_zlim3d()
+
+    x_range = abs(x_limits[1] - x_limits[0])
+    y_range = abs(y_limits[1] - y_limits[0])
+    z_range = abs(z_limits[1] - z_limits[0])
+
+    x_middle = np.mean(x_limits)
+    y_middle = np.mean(y_limits)
+    z_middle = np.mean(z_limits)
+
+    plot_radius = 0.5 * max([x_range, y_range, z_range])
+
+    ax.set_xlim3d([x_middle - plot_radius, x_middle + plot_radius])
+    ax.set_ylim3d([y_middle - plot_radius, y_middle + plot_radius])
+    ax.set_zlim3d([z_middle - plot_radius, z_middle + plot_radius])
+
 
 # ==========================================
 # 4. PLOT 3D ACADÊMICO
 # ==========================================
 def plot_3d_trajectory():
     dfs, config = load_data()
-    
-    # --- Configurações de Estilo ---
-    plt.rcParams.update({
-        "font.size": 11,
-        "font.family": "serif",
-        "axes.labelsize": 11,
-        "legend.fontsize": 9,
-        "figure.figsize": [12, 4] # Sua solicitação de 12x4
-    })
 
     if not dfs:
-        print("[ERRO] Nenhum CSV válido. Gerando apenas referência para teste.")
-        t_ref = np.arange(0, 50, 0.1)
-    else:
-        max_time = max(df["time"].max() for df in dfs.values())
-        t_ref = np.arange(0.0, max_time + 0.1, 0.1)
+        print("[ERRO] Nenhum CSV válido encontrado.")
+        return
 
+    plt.rcParams.update({
+        "font.size": 12,
+        "font.family": "serif",
+        "axes.labelsize": 12,
+        "legend.fontsize": 10,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+    })
+
+    max_time = max(df["time"].max() for df in dfs.values())
+    t_ref = np.arange(0.0, max_time + 0.1, 0.1)
     ref_x, ref_y, ref_z = get_reference_trajectory(t_ref)
 
-    # CRIANDO A FIGURA (Removido o figsize daqui para usar o do rcParams)
-    fig = plt.figure() 
+    fig = plt.figure(figsize=(7.5, 6.0))
     ax = fig.add_subplot(111, projection="3d")
 
-    # Plot Referência
-    ax.plot(ref_x, ref_y, ref_z, color="black", linestyle=":", linewidth=2, label="Reference")
+    # referência
+    ax.plot(
+        ref_x,
+        ref_y,
+        ref_z,
+        color="black",
+        linestyle=":",
+        linewidth=2.2,
+        label="Reference"
+    )
 
-    # Plot Controladores
+    # trajetórias dos controladores
     for name, df in dfs.items():
-        ax.plot(df["x"], df["y"], df["z"], 
-                color=config[name]["color"], linestyle=config[name]["ls"], 
-                linewidth=1.5, label=name)
+        ax.plot(
+            df["x"].to_numpy(),
+            df["y"].to_numpy(),
+            df["z"].to_numpy(),
+            color=config[name]["color"],
+            linestyle=config[name]["ls"],
+            linewidth=1.8,
+            label=name
+        )
 
-    # Pontos de Início/Fim
-    ax.scatter(ref_x[0], ref_y[0], ref_z[0], color="black", marker="o", s=30, label="Start")
-    ax.scatter(ref_x[-1], ref_y[-1], ref_z[-1], color="black", marker="^", s=40, label="End")
+    # início da trajetória
+    ax.scatter(
+        ref_x[0], ref_y[0], ref_z[0],
+        color="black",
+        marker="o",
+        s=35,
+        label="Start"
+    )
 
-    # Estética dos Eixos
-    ax.set_xlabel("X position [m]", labelpad=5)
-    ax.set_ylabel("Y position [m]", labelpad=5)
-    ax.set_zlabel("Depth Z [m]", labelpad=5)
-    
-    # Visão otimizada para formato horizontal
-    ax.view_init(elev=20, azim=-60)
+    # fim da trajetória
+    ax.scatter(
+        ref_x[-1], ref_y[-1], ref_z[-1],
+        color="black",
+        marker="^",
+        s=45,
+        label="End"
+    )
+
+    ax.set_xlabel("X position [m]", labelpad=10)
+    ax.set_ylabel("Y position [m]", labelpad=10)
+    ax.set_zlabel("Depth Z [m]", labelpad=10)
+
+    ax.view_init(elev=24, azim=-58)
     set_axes_equal(ax)
 
-    # Limpeza visual (Panes transparentes)
-    ax.xaxis.pane.fill = ax.yaxis.pane.fill = ax.zaxis.pane.fill = False
-    
-    # Legenda fora do gráfico ou ajustada para não poluir
-    ax.legend(loc="center left", bbox_to_anchor=(1.05, 0.5), frameon=True, edgecolor="black")
+    # grade discreta
+    ax.grid(True)
+
+    # deixa o fundo mais limpo
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+
+    # legenda acadêmica
+    ax.legend(
+        loc="upper left",
+        frameon=True,
+        fancybox=False,
+        edgecolor="black"
+    )
 
     plt.tight_layout()
-    
-    # Salvamento
-    plt.savefig("fig_trajectory_3d.png", dpi=300, bbox_inches="tight")
-    print("[OK] Gráfico salvo como fig_trajectory_3d.png")
+    plt.savefig("fig_trajectory_3d.pdf", format="pdf", dpi=300, bbox_inches="tight")
+    plt.savefig("fig_trajectory_3d.png", format="png", dpi=300, bbox_inches="tight")
+    print("[OK] Saved: fig_trajectory_3d.pdf")
+    print("[OK] Saved: fig_trajectory_3d.png")
+
     plt.show()
+
 
 if __name__ == "__main__":
     plot_3d_trajectory()

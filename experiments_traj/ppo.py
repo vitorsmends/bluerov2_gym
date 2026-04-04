@@ -46,10 +46,69 @@ class TrajectoryGenerator:
 
 
 # ==========================================
-# 3. EXECUÇÃO PPO
+# 3. ESTIMATIVA DE ENERGIA DOS ATUADORES
+# ==========================================
+T200_MAX_THRUST_N = 50.0
+T200_MAX_POWER_W = 350.0
+
+BLUEROV2_LENGTH_M = 0.457
+BLUEROV2_WIDTH_M = 0.338
+HALF_LENGTH = BLUEROV2_LENGTH_M / 2.0
+HALF_WIDTH = BLUEROV2_WIDTH_M / 2.0
+C45 = 1.0 / np.sqrt(2.0)
+YAW_ARM = C45 * (HALF_LENGTH + HALF_WIDTH)
+
+B_ALLOC = np.array([
+    [ C45,  C45,  C45,  C45, 0.0, 0.0],
+    [-C45,  C45,  C45, -C45, 0.0, 0.0],
+    [ 0.0,  0.0,  0.0,  0.0, 1.0, 1.0],
+    [-YAW_ARM, YAW_ARM, -YAW_ARM, YAW_ARM, 0.0, 0.0],
+], dtype=float)
+
+B_ALLOC_PINV = np.linalg.pinv(B_ALLOC)
+
+
+def estimate_thruster_forces_from_action(action_6d):
+    surge, sway, heave, roll, pitch, yaw = action_6d
+    tau_actuated = np.array([surge, sway, heave, yaw], dtype=float)
+    thruster_forces = B_ALLOC_PINV @ tau_actuated
+    return thruster_forces
+
+
+def estimate_thruster_power_watts(thruster_forces):
+    abs_force = np.abs(thruster_forces)
+    force_ratio = np.clip(abs_force / T200_MAX_THRUST_N, 0.0, 1.0)
+    power = T200_MAX_POWER_W * (force_ratio ** 1.5)
+    return power
+
+
+def build_energy_header():
+    header = ["time", "x", "y", "z", "error"]
+    header += ["cmd_surge", "cmd_sway", "cmd_heave", "cmd_roll", "cmd_pitch", "cmd_yaw"]
+    header += [f"thruster_{i+1}_force_N" for i in range(6)]
+    header += [f"thruster_{i+1}_power_W" for i in range(6)]
+    header += [f"thruster_{i+1}_step_energy_J" for i in range(6)]
+    header += [f"thruster_{i+1}_cum_energy_J" for i in range(6)]
+    header += ["total_power_W", "total_step_energy_J", "total_cum_energy_J"]
+    return header
+
+
+def build_energy_row(t, curr_pos, dist_error, action, thr_forces, thr_power, thr_step_energy, thr_cum_energy):
+    row = [t, curr_pos[0], curr_pos[1], curr_pos[2], dist_error]
+    row += action.tolist()
+    row += thr_forces.tolist()
+    row += thr_power.tolist()
+    row += thr_step_energy.tolist()
+    row += thr_cum_energy.tolist()
+    row += [float(np.sum(thr_power)), float(np.sum(thr_step_energy)), float(np.sum(thr_cum_energy))]
+    return row
+
+
+# ==========================================
+# 4. EXECUÇÃO PPO
 # ==========================================
 def run_trajectory_ppo():
-    print("[INFO] Iniciando PPO...")
+    print("[INFO] Iniciando PPO com estimativa de energia...")
 
     env = gym.make("BlueRov-v0", render_mode=None)
 
@@ -69,6 +128,7 @@ def run_trajectory_ppo():
 
     obs, _ = env.reset()
     data = []
+    thruster_cum_energy = np.zeros(6, dtype=float)
 
     print("[INFO] Simulação iniciada")
 
@@ -108,11 +168,29 @@ def run_trajectory_ppo():
 
         norm_obs = venv.normalize_obs(virtual_obs)
         action, _ = model.predict(norm_obs, deterministic=True)
+        action = np.asarray(action, dtype=float).reshape(-1)
+
+        thruster_forces = estimate_thruster_forces_from_action(action)
+        thruster_power = estimate_thruster_power_watts(thruster_forces)
+        thruster_step_energy = thruster_power * dt
+        thruster_cum_energy += thruster_step_energy
 
         obs, _, terminated, _, _ = env.step(action)
 
         dist_error = np.linalg.norm(error_pos_world)
-        data.append([t, curr_pos[0], curr_pos[1], curr_pos[2], dist_error])
+
+        data.append(
+            build_energy_row(
+                t=t,
+                curr_pos=curr_pos,
+                dist_error=dist_error,
+                action=action,
+                thr_forces=thruster_forces,
+                thr_power=thruster_power,
+                thr_step_energy=thruster_step_energy,
+                thr_cum_energy=thruster_cum_energy.copy(),
+            )
+        )
 
         if i % 100 == 0:
             print(f"T={t:.1f}s | Erro: {dist_error:.2f}m")
@@ -122,7 +200,7 @@ def run_trajectory_ppo():
 
     with open("data_ppo_traj.csv", "w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["time", "x", "y", "z", "error"])
+        writer.writerow(build_energy_header())
         writer.writerows(data)
 
     env.close()

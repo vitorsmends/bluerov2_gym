@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 
 def get_reference_trajectory(t_array):
     radius = 1.0
-    speed = 0.1
+    speed = 0.15
     z_target = -0.5
 
     ref_x, ref_y, ref_z = [], [], []
@@ -41,7 +41,7 @@ def load_valid_data(config):
 
         missing = required_cols - set(df.columns)
         if missing:
-            print(f"[AVISO] {name} ignorado. Faltam colunas: {sorted(missing)}")
+            print(f"[AVISO] {name} ignorado. Faltam colunas obrigatórias: {sorted(missing)}")
             continue
 
         df = df.sort_values("time").reset_index(drop=True)
@@ -68,7 +68,6 @@ def plot_for_article():
         "font.family": "serif",
     })
 
-    # usa o maior vetor de tempo, não o menor
     max_time = max(df["time"].max() for df in dfs.values())
     t_ref = np.arange(0.0, max_time + 0.1, 0.1)
     ref_x, ref_y, ref_z = get_reference_trajectory(t_ref)
@@ -141,6 +140,39 @@ def plot_for_article():
     plt.tight_layout()
     plt.savefig("fig_tracking_error.pdf", format="pdf", dpi=300, bbox_inches="tight")
     print("[OK] Saved: fig_tracking_error.pdf")
+
+    # FIGURA 4: energia acumulada total
+    plt.figure(figsize=(6, 4))
+    plotted_energy = False
+
+    for name, df in dfs.items():
+        if "total_cum_energy_J" not in df.columns:
+            print(f"[AVISO] {name} não possui a coluna 'total_cum_energy_J'.")
+            continue
+
+        energy = df["total_cum_energy_J"].to_numpy(dtype=float)
+
+        plt.plot(
+            df["time"].to_numpy(),
+            energy,
+            label=f"{name} (Final: {energy[-1]:.2f} J)",
+            color=config[name]["color"],
+            linestyle=config[name]["ls"],
+            linewidth=1.5,
+        )
+        plotted_energy = True
+
+    if plotted_energy:
+        plt.xlabel("Time [s]")
+        plt.ylabel("Cumulative Energy [J]")
+        plt.grid(True, linestyle="--", alpha=0.5)
+        plt.legend(loc="upper left", frameon=True)
+        plt.tight_layout()
+        plt.savefig("fig_cumulative_energy.pdf", format="pdf", dpi=300, bbox_inches="tight")
+        print("[OK] Saved: fig_cumulative_energy.pdf")
+    else:
+        print("[AVISO] Nenhum arquivo possui dados de energia. Figura de energia não foi gerada.")
+        plt.close()
 
     plt.show()
 
