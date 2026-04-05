@@ -1,4 +1,5 @@
 import csv
+import time
 import numpy as np
 import gymnasium as gym
 from gymnasium.envs.registration import register
@@ -97,6 +98,13 @@ def build_header():
     header += ["cmd_surge", "cmd_sway", "cmd_heave", "cmd_roll", "cmd_pitch", "cmd_yaw"]
     header += [f"thruster_{i+1}_power_W" for i in range(6)]
     header += ["total_power_W", "total_step_energy_J", "total_cum_energy_J"]
+    header += [
+        "controller_wall_time_s",
+        "controller_cpu_time_s",
+        "controller_frequency_hz",
+        "controller_cum_wall_time_s",
+        "controller_cum_cpu_time_s",
+    ]
     return header
 
 
@@ -120,6 +128,10 @@ def run_ppo_stationkeeping():
     steps = 800
     data = []
 
+    global_wall_time = 0.0
+    global_cpu_time = 0.0
+    global_steps = 0
+
     for scenario in SCENARIOS:
         scenario_id = scenario["id"]
         target = scenario["target"]
@@ -131,6 +143,9 @@ def run_ppo_stationkeeping():
         obs = set_env_state(env, init, yaw=YAW_TARGET)
 
         thruster_cum_energy = np.zeros(6, dtype=float)
+
+        scenario_wall_time = 0.0
+        scenario_cpu_time = 0.0
 
         for i in range(steps):
             t = i * dt
@@ -163,9 +178,28 @@ def run_ppo_stationkeeping():
             virtual_obs["z"] = np.array([err_z_body], dtype=np.float32)
             virtual_obs["u"] = np.array([error_vel_world[0]], dtype=np.float32)
 
+            wall_t0 = time.perf_counter()
+            cpu_t0 = time.process_time()
+
             norm_obs = venv.normalize_obs(virtual_obs)
             action, _ = model.predict(norm_obs, deterministic=True)
             action = np.asarray(action, dtype=float).reshape(-1)
+
+            cpu_t1 = time.process_time()
+            wall_t1 = time.perf_counter()
+
+            controller_wall_time = wall_t1 - wall_t0
+            controller_cpu_time = cpu_t1 - cpu_t0
+            controller_frequency = (
+                1.0 / controller_wall_time if controller_wall_time > 0.0 else np.nan
+            )
+
+            scenario_wall_time += controller_wall_time
+            scenario_cpu_time += controller_cpu_time
+
+            global_wall_time += controller_wall_time
+            global_cpu_time += controller_cpu_time
+            global_steps += 1
 
             thruster_forces = estimate_thruster_forces_from_action(action)
             thruster_power = estimate_thruster_power_watts(thruster_forces)
@@ -186,7 +220,12 @@ def run_ppo_stationkeeping():
             row += [
                 float(np.sum(thruster_power)),
                 float(np.sum(thruster_step_energy)),
-                float(np.sum(thruster_cum_energy))
+                float(np.sum(thruster_cum_energy)),
+                float(controller_wall_time),
+                float(controller_cpu_time),
+                float(controller_frequency),
+                float(scenario_wall_time),
+                float(scenario_cpu_time),
             ]
             data.append(row)
 
@@ -199,6 +238,14 @@ def run_ppo_stationkeeping():
         writer.writerows(data)
 
     env.close()
+
+    if global_steps > 0:
+        print("[RESUMO PPO]")
+        print(f"  Steps totais: {global_steps}")
+        print(f"  Wall time médio do controlador: {global_wall_time / global_steps:.6e} s")
+        print(f"  CPU time médio do controlador : {global_cpu_time / global_steps:.6e} s")
+        print(f"  Frequência média equivalente  : {global_steps / global_wall_time:.2f} Hz")
+
     print("[OK] data_ppo_stationkeeping.csv gerado.")
 
 

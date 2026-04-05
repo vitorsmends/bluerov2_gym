@@ -1,4 +1,5 @@
 import csv
+import time
 import numpy as np
 import gymnasium as gym
 from gymnasium.envs.registration import register
@@ -141,6 +142,15 @@ def build_header():
     header += ["cmd_surge", "cmd_sway", "cmd_heave", "cmd_roll", "cmd_pitch", "cmd_yaw"]
     header += [f"thruster_{i+1}_power_W" for i in range(6)]
     header += ["total_power_W", "total_step_energy_J", "total_cum_energy_J"]
+
+    # custo computacional
+    header += [
+        "controller_wall_time_s",
+        "controller_cpu_time_s",
+        "controller_frequency_hz",
+        "controller_cum_wall_time_s",
+        "controller_cum_cpu_time_s",
+    ]
     return header
 
 
@@ -154,6 +164,10 @@ def run_pid_stationkeeping():
     u_max = 20.0
 
     data = []
+
+    global_wall_time = 0.0
+    global_cpu_time = 0.0
+    global_steps = 0
 
     for scenario in SCENARIOS:
         scenario_id = scenario["id"]
@@ -174,6 +188,10 @@ def run_pid_stationkeeping():
 
         controllers = [pid_x, pid_y, pid_z, pid_roll, pid_pitch, pid_yaw]
         thruster_cum_energy = np.zeros(6, dtype=float)
+
+        scenario_wall_time = 0.0
+        scenario_cpu_time = 0.0
+        scenario_steps = 0
 
         for i in range(steps):
             t = i * dt
@@ -203,9 +221,29 @@ def run_pid_stationkeeping():
             errors = np.concatenate((err_pos_body, err_att))
             ff = np.zeros(6, dtype=float)
 
+            # ===== medição do custo computacional do controlador =====
+            wall_t0 = time.perf_counter()
+            cpu_t0 = time.process_time()
+
             action = np.zeros(6, dtype=float)
             for j in range(6):
                 action[j] = controllers[j].update(errors[j], curr_vel[j], ff[j])
+
+            cpu_t1 = time.process_time()
+            wall_t1 = time.perf_counter()
+
+            controller_wall_time = wall_t1 - wall_t0
+            controller_cpu_time = cpu_t1 - cpu_t0
+            controller_freq = 1.0 / controller_wall_time if controller_wall_time > 0.0 else np.nan
+
+            scenario_wall_time += controller_wall_time
+            scenario_cpu_time += controller_cpu_time
+            scenario_steps += 1
+
+            global_wall_time += controller_wall_time
+            global_cpu_time += controller_cpu_time
+            global_steps += 1
+            # =========================================================
 
             thruster_forces = estimate_thruster_forces_from_action(action)
             thruster_power = estimate_thruster_power_watts(thruster_forces)
@@ -226,12 +264,25 @@ def run_pid_stationkeeping():
             row += [
                 float(np.sum(thruster_power)),
                 float(np.sum(thruster_step_energy)),
-                float(np.sum(thruster_cum_energy))
+                float(np.sum(thruster_cum_energy)),
+                float(controller_wall_time),
+                float(controller_cpu_time),
+                float(controller_freq),
+                float(scenario_wall_time),
+                float(scenario_cpu_time),
             ]
             data.append(row)
 
             if terminated or truncated:
                 break
+
+        if scenario_steps > 0:
+            print(
+                f"[PID][Cenário {scenario_id}] "
+                f"wall médio = {scenario_wall_time / scenario_steps:.6e} s | "
+                f"cpu médio = {scenario_cpu_time / scenario_steps:.6e} s | "
+                f"freq média = {scenario_steps / scenario_wall_time:.2f} Hz"
+            )
 
     with open("data_pid_stationkeeping.csv", "w", newline="") as f:
         writer = csv.writer(f)
@@ -239,6 +290,14 @@ def run_pid_stationkeeping():
         writer.writerows(data)
 
     env.close()
+
+    if global_steps > 0:
+        print("[RESUMO PID]")
+        print(f"  Steps totais: {global_steps}")
+        print(f"  Wall time médio do controlador: {global_wall_time / global_steps:.6e} s")
+        print(f"  CPU time médio do controlador : {global_cpu_time / global_steps:.6e} s")
+        print(f"  Frequência média equivalente  : {global_steps / global_wall_time:.2f} Hz")
+
     print("[OK] data_pid_stationkeeping.csv gerado.")
 
 
