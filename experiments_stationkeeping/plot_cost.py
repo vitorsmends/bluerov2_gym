@@ -2,6 +2,7 @@ import os
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 
 # ==========================================
@@ -73,8 +74,7 @@ def load_data():
 
         # dt por cenário
         df["dt_s"] = df.groupby("scenario_id")["time"].diff()
-        df["dt_s"] = df["dt_s"].fillna(method="bfill")
-        df["dt_s"] = df["dt_s"].fillna(method="ffill")
+        df["dt_s"] = df["dt_s"].bfill().ffill()
 
         # evita divisão por zero / NaN
         df["dt_s"] = df["dt_s"].replace(0.0, np.nan)
@@ -134,7 +134,8 @@ def compute_metrics_per_scenario(df):
             "cpu_time_total_ms": float(np.nansum(cpu_ms)),
 
             # razão cpu/wall
-            "cpu_to_wall_ratio": float(np.nansum(cpu_ms) / np.nansum(wall_ms)) if np.nansum(wall_ms) > 0 else np.nan,
+            "cpu_to_wall_ratio": float(np.nansum(cpu_ms) / np.nansum(wall_ms))
+            if np.nansum(wall_ms) > 0 else np.nan,
 
             # frequência reportada
             "freq_mean_hz": float(np.nanmean(freq_hz)),
@@ -352,14 +353,18 @@ def plot_computational_cost_results():
     save_plot("fig_computational_wall_time")
 
     # ==========================================
-    # FIGURA 2: CPU TIME AO LONGO DO TEMPO
+    # FIGURA 2: CPU TIME AO LONGO DO TEMPO + INSET ZOOM
     # ==========================================
     plt.figure(figsize=(6.5, 4.2))
+    ax = plt.gca()
+
+    cpu_series = {}
 
     for name, df in dfs.items():
         t, mean_v, std_v = aggregate_time_series(df, "controller_cpu_time_ms")
+        cpu_series[name] = (t, mean_v, std_v)
 
-        plt.plot(
+        ax.plot(
             t, mean_v,
             label=name,
             color=config[name]["color"],
@@ -367,7 +372,7 @@ def plot_computational_cost_results():
             linewidth=1.8,
         )
 
-        plt.fill_between(
+        ax.fill_between(
             t,
             mean_v - std_v,
             mean_v + std_v,
@@ -375,10 +380,51 @@ def plot_computational_cost_results():
             alpha=0.15,
         )
 
-    plt.xlabel("Time [s]")
-    plt.ylabel("CPU Time [ms]")
-    plt.grid(True, linestyle="--", alpha=0.5)
-    plt.legend(frameon=True)
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("CPU Time [ms]")
+    ax.grid(True, linestyle="--", alpha=0.5)
+    ax.legend(frameon=True)
+
+    # região do zoom
+    x1, x2 = 10.0, 15.0
+
+    zoom_values = []
+    for ctrl_name in ["PID", "PPO"]:
+        if ctrl_name in cpu_series:
+            t, mean_v, std_v = cpu_series[ctrl_name]
+            mask = (t >= x1) & (t <= x2)
+            if np.any(mask):
+                zoom_values.extend((mean_v[mask] - std_v[mask]).tolist())
+                zoom_values.extend((mean_v[mask] + std_v[mask]).tolist())
+
+    if len(zoom_values) > 0:
+        y1 = max(0.0, np.min(zoom_values) * 0.95)
+        y2 = np.max(zoom_values) * 1.05
+
+        axins = inset_axes(ax, width="30%", height="30%", loc="upper right", borderpad=1.2)
+
+        for name, (t, mean_v, std_v) in cpu_series.items():
+            axins.plot(
+                t, mean_v,
+                color=config[name]["color"],
+                linestyle=config[name]["ls"],
+                linewidth=1.4,
+            )
+            axins.fill_between(
+                t,
+                mean_v - std_v,
+                mean_v + std_v,
+                color=config[name]["color"],
+                alpha=0.15,
+            )
+
+        axins.set_xlim(x1, x2)
+        axins.set_ylim(y1, y2)
+        axins.grid(True, linestyle="--", alpha=0.4)
+        axins.tick_params(labelsize=8)
+
+        mark_inset(ax, axins, loc1=2, loc2=4, fc="none", ec="0.4", lw=1.0)
+
     plt.tight_layout()
     save_plot("fig_computational_cpu_time")
 
