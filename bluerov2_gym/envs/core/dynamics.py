@@ -5,7 +5,7 @@ class Dynamics:
     # ==========================================
     # FLAG GLOBAL DO CENÁRIO
     # ==========================================
-    SEA_STATE = "storm"   # opções: "calm", "storm"
+    SEA_STATE = "calm"   # opções: "calm", "storm"
 
     def __init__(self):
         self.dt = 0.1
