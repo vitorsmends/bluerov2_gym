@@ -37,15 +37,16 @@ class BlueRov(gym.Env):
             "p": 0.0, "q": 0.0, "r": 0.0   # Angular (Roll rate, Pitch rate, Yaw rate)
         }
 
+# -----------------------------------------------------------
+        # 2. Espaco de Acao (8 Dimensoes: Comandos dos 8 propulsores)
         # -----------------------------------------------------------
-        # 2. Espaço de Ação (6 Dimensões: Forças X,Y,Z e Torques K,M,N)
-        # -----------------------------------------------------------
-        # Definindo limites nominais de força (ex: +/- 50 Newtons)
-        # O agente deve aprender a operar dentro desses limites.
+        # O agente PPO deve aprender a atuar enviando comandos normalizados
+        # para cada propulsor individualmente. A alocacao de forca e o calculo
+        # do torque resultante ocorrem internamente na classe Dynamics.
         self.action_space = spaces.Box(
-            low=-50.0,
-            high=50.0,
-            shape=(6,),
+            low=-1.0,
+            high=1.0,
+            shape=(8,),
             dtype=np.float32,
         )
 

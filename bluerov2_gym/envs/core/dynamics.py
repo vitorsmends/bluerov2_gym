@@ -179,62 +179,71 @@ class Dynamics:
         TODO_KYLE:
         Confirmar o caso espectral exato que você quer reproduzir.
         """
-        configs = {
-            "calm": {
-                "Hs": 2.78,
-                "Tp": 7.1,
-                "gamma": 3.3,
-                "N": 64,
-                "depth": 54.0,
-                "seed": 42,
-            },
-            "storm": {
-                "Hs": 3.47,
-                "Tp": 9.5,
-                "gamma": 3.3,
-                "N": 64,
-                "depth": 54.0,
-                "seed": 42,
-            },
-        }
+            configs = {
+                "calm": {
+                    "Hs": 2.78,
+                    "Tp": 7.1,
+                    "gamma": 3.3,
+                    "N": 100,
+                    "depth": 54.0,
+                    "seed": 42,
+                },
+                "storm": {
+                    "Hs": 3.47,
+                    "Tp": 9.5,
+                    "gamma": 3.3,
+                    "N": 100,
+                    "depth": 54.0,
+                    "seed": 42,
+                },
+            }
 
-        if self.SEA_STATE not in configs:
-            raise ValueError(f"SEA_STATE inválido: {self.SEA_STATE}")
+            if self.SEA_STATE not in configs:
+                raise ValueError(f"SEA_STATE invalido: {self.SEA_STATE}")
 
-        self._init_jonswap(**configs[self.SEA_STATE])
+            self._init_jonswap(**configs[self.SEA_STATE])
 
-    def _init_jonswap(self, Hs, Tp, gamma, N, depth, seed):
-        self._depth = depth
-        self._rng = np.random.default_rng(seed)
+        def _init_jonswap(self, Hs, Tp, gamma, N, depth, seed):
+            self._depth = depth
+            self._rng = np.random.default_rng(seed)
 
-        wp = 2.0 * np.pi / Tp
-        dw = 3.0 * wp / N
-        alpha_js = 0.0081
+            wp = 2.0 * np.pi / Tp
+            dw = 3.0 * wp / N
+            alpha_js = 0.0081
 
-        waves = []
-        for i in range(1, N + 1):
-            omega = i * dw
-            sigma = 0.07 if omega <= wp else 0.09
-            Gamma = np.exp(-((omega - wp) ** 2) / (2.0 * sigma**2 * wp**2))
-            S = (
-                alpha_js
-                * self.g**2
-                * omega**-5
-                * np.exp(-1.25 * (wp / omega) ** 4)
-                * gamma**Gamma
-            )
+            waves_raw = []
+            for i in range(1, N + 1):
+                omega = i * dw
+                
+                f_hz = omega / (2.0 * np.pi)
+                if f_hz < 0.2 or f_hz > 2.0:
+                    continue
 
-            a = np.sqrt(2.0 * S * dw)
-            phase = self._rng.uniform(0.0, 2.0 * np.pi)
-            kappa = self._dispersion(omega, depth)
-            waves.append((omega, a, phase, kappa))
+                sigma = 0.07 if omega <= wp else 0.09
+                Gamma = np.exp(-((omega - wp) ** 2) / (2.0 * sigma**2 * wp**2))
+                S = (
+                    alpha_js
+                    * self.g**2
+                    * omega**-5
+                    * np.exp(-1.25 * (wp / omega) ** 4)
+                    * gamma**Gamma
+                )
 
-        # Reescala para Hs desejado
-        m0 = sum(0.5 * a**2 for _, a, _, _ in waves)
-        hs_est = 4.0 * np.sqrt(m0) if m0 > 0 else 1.0
-        scale = Hs / hs_est if hs_est > 1e-12 else 1.0
+                a = np.sqrt(2.0 * S * dw)
+                phase = self._rng.uniform(0.0, 2.0 * np.pi)
+                kappa = self._dispersion(omega, depth)
+                waves_raw.append((omega, a, phase, kappa))
 
-        self._waves = [(w, a * scale, ph, k) for (w, a, ph, k) in waves]
+            if waves_raw:
+                max_a = max(a for _, a, _, _ in waves_raw)
+                threshold = 0.05 * max_a
+                waves_raw = [(w, a, ph, k) for (w, a, ph, k) in waves_raw if a > threshold]
+
+            m0 = sum(0.5 * a**2 for _, a, _, _ in waves_raw)
+            hs_est = 4.0 * np.sqrt(m0) if m0 > 0 else 1.0
+            scale = Hs / hs_est if hs_est > 1e-12 else 1.0
+
+            self._waves = [(w, a * scale, ph, k) for (w, a, ph, k) in waves_raw]
 
     def _dispersion(self, omega, depth):
         """Resolve omega^2 = g k tanh(k d) por Newton-Raphson."""
@@ -552,7 +561,7 @@ class Dynamics:
         nu_wave_body[0] = vp_x
         nu_wave_body[2] = vp_z
 
-        nu_rel = nu - nu_c_body - nu_wave_body
+        nu_rel = nu - nu_c_body # - nu_wave_body
 
         D = self._D_force(nu_rel)
         g_eta = self._g_eta(eta)
