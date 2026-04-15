@@ -13,7 +13,7 @@ setup(
     install_requires=[
         "gymnasium>=0.29.1",
         "meshcat>=0.3.2",
-        "numpy>=2.1.3",
+        # "numpy>=2.1.3", for PC
         "scipy>=1.14.1",
         "stable-baselines3[extra]>=2.3.2",
         "transforms3d>=0.4.1",
