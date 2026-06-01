@@ -1,57 +1,71 @@
+import os
 import gymnasium as gym
+import numpy as np
+
 from gymnasium.envs.registration import register
+
 from stable_baselines3 import PPO
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-import numpy as np
-import os
+from stable_baselines3.common.callbacks import CheckpointCallback
 
-# ---------------------------------------------------------
-# 1. REGISTRO DO AMBIENTE (Garanta que o caminho aponta para sua classe BlueRov)
-# ---------------------------------------------------------
-# Se você já faz isso no __init__.py do bluerov2_gym, pode remover este bloco.
+
+ENV_ID = "BlueRov-v0"
+
+LOG_DIR = "./bluerov_tensorboard/"
+MODEL_DIR = "./models/"
+MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo")
+VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize.pkl")
+
+
 try:
     register(
-        id="BlueRov-v0",
-        entry_point="bluerov2_gym.envs:BlueRov", # Ajuste conforme a estrutura de pastas
-        max_episode_steps=1000, # Importante para evitar loops infinitos
+        id=ENV_ID,
+        entry_point="bluerov2_gym.envs:BlueRov",
+        max_episode_steps=1000,
     )
 except gym.error.Error:
-    pass # Já registrado
+    pass
 
-def make_env():
-    # Cria o ambiente
-    env = gym.make("BlueRov-v0", render_mode="rgb_array") # ou None para treino rápido
-    # Monitor é essencial para logar recompensas reais (não normalizadas)
-    env = Monitor(env)
-    return env
+
+def make_env(render_mode=None):
+    def _init():
+        env = gym.make(ENV_ID, render_mode=render_mode)
+        env = Monitor(env)
+        return env
+
+    return _init
+
 
 def train_model():
-    # Cria pastas de log se não existirem
-    os.makedirs("./bluerov_tensorboard/", exist_ok=True)
+    os.makedirs(LOG_DIR, exist_ok=True)
+    os.makedirs(MODEL_DIR, exist_ok=True)
 
-    # ---------------------------------------------------------
-    # 2. CONFIGURAÇÃO DE AMBIENTE VETORIZADO
-    # ---------------------------------------------------------
-    env = DummyVecEnv([make_env])
-    
-    # VecNormalize é CRÍTICO para PPO convergir bem em controle contínuo
+    env = DummyVecEnv([
+        make_env(render_mode=None)
+    ])
+
     env = VecNormalize(
         env,
         norm_obs=True,
         norm_reward=True,
         clip_obs=10.0,
         clip_reward=10.0,
+        gamma=0.99,
     )
 
-    # ---------------------------------------------------------
-    # 3. CONFIGURAÇÃO DO MODELO (PPO)
-    # ---------------------------------------------------------
+    checkpoint_callback = CheckpointCallback(
+        save_freq=100_000,
+        save_path=MODEL_DIR,
+        name_prefix="bluerov_ppo_checkpoint",
+        save_vecnormalize=True,
+    )
+
     model = PPO(
-        "MultiInputPolicy",  # OBRIGATÓRIO: Pois seu observation_space é Dict
-        env,
+        policy="MultiInputPolicy",
+        env=env,
         verbose=1,
-        tensorboard_log="./bluerov_tensorboard/",
+        tensorboard_log=LOG_DIR,
         learning_rate=3e-4,
         n_steps=2048,
         batch_size=64,
@@ -59,60 +73,70 @@ def train_model():
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        # MELHORIA: Coeficiente de entropia evita que o robô fique parado cedo demais
-        ent_coef=0.01, 
-        policy_kwargs=dict(net_arch=[256, 256]) # Rede um pouco maior para lidar com 6-DoF
+        ent_coef=0.01,
+        vf_coef=0.5,
+        max_grad_norm=0.5,
+        policy_kwargs=dict(
+            net_arch=dict(
+                pi=[256, 256],
+                vf=[256, 256],
+            )
+        ),
     )
 
     print("Iniciando treinamento...")
-    model.learn(total_timesteps=1_000_000)
+    model.learn(
+        total_timesteps=1_000_000,
+        callback=checkpoint_callback,
+        tb_log_name="PPO_BlueROV2_Thrusters",
+    )
     print("Treinamento finalizado.")
 
-    model.save("bluerov_ppo")
-    env.save("bluerov_vec_normalize.pkl") # Salva estatísticas de normalização
+    model.save(MODEL_PATH)
+    env.save(VECNORM_PATH)
+    env.close()
 
-def evaluate_model():
+    print(f"Modelo salvo em: {MODEL_PATH}")
+    print(f"VecNormalize salvo em: {VECNORM_PATH}")
+
+
+def evaluate_model(render_mode="human", episodes=5):
     print("Iniciando avaliação...")
-    # Recria o ambiente
-    env = DummyVecEnv([make_env])
-    
-    # Carrega as estatísticas de normalização do treino (MUITO IMPORTANTE)
-    # Sem isso, o agente vê o mundo com "óculos errados"
-    env = VecNormalize.load("bluerov_vec_normalize.pkl", env)
-    
-    # Desliga atualização de estatísticas e normalização de recompensa para avaliação
+
+    env = DummyVecEnv([
+        make_env(render_mode=render_mode)
+    ])
+
+    env = VecNormalize.load(VECNORM_PATH, env)
     env.training = False
     env.norm_reward = False
 
-    model = PPO.load("bluerov_ppo")
+    model = PPO.load(MODEL_PATH, env=env)
 
-    episodes = 5
     for ep in range(episodes):
         obs = env.reset()
         done = False
-        total_reward = 0
-        
-        while not done:
-            # deterministic=True é padrão para avaliação
-            action, _ = model.predict(obs, deterministic=True)
-            
-            # VecEnv retorna arrays, por isso action já está no formato certo
-            obs, reward, dones, info = env.step(action)
-            
-            # VecEnv retorna reward como array
-            total_reward += reward[0]
-            
-            # VecEnv retorna dones como array de booleans
-            done = dones[0] 
-            
-            # Opcional: Renderizar se quiser ver (ficará lento)
-            # env.envs[0].render()
+        total_reward = 0.0
+        step_count = 0
 
-        print(f"Episode {ep+1} reward: {total_reward:.2f}")
+        while not done:
+            action, _ = model.predict(obs, deterministic=True)
+
+            obs, reward, dones, infos = env.step(action)
+
+            total_reward += float(reward[0])
+            done = bool(dones[0])
+            step_count += 1
+
+            # Para debug dos comandos de thruster:
+            if step_count % 100 == 0:
+                print(f"Ep {ep + 1} | Step {step_count} | Action: {action[0]}")
+
+        print(f"Episode {ep + 1} | reward: {total_reward:.2f} | steps: {step_count}")
+
+    env.close()
+
 
 if __name__ == "__main__":
-    # Treina
     train_model()
-    
-    # Avalia
-    evaluate_model()
+    evaluate_model(render_mode="human", episodes=5)
