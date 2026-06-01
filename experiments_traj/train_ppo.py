@@ -62,7 +62,6 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         self.traj = TrajectoryGenerator()
         self.current_t = 0.0
         self.dt = 0.1
-        self.prev_action = np.zeros(6, dtype=np.float32)
 
     def _scalar(self, value):
         return float(np.asarray(value).reshape(-1)[0])
@@ -93,8 +92,6 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         error_vel = curr_vel - target_vel
         yaw_error = self._wrap_angle(yaw - target_att[2])
 
-        # Rotate the tracking error to the desired trajectory frame
-        # This is more consistent than using the current yaw during training.
         psi_ref = float(target_att[2])
         c = math.cos(psi_ref)
         s = math.sin(psi_ref)
@@ -125,7 +122,6 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         rng = np.random.default_rng(seed)
 
         self.current_t = rng.uniform(0.0, 50.0)
-        self.prev_action[:] = 0.0
 
         target_pos, target_att, _ = self.traj.get_state_at_time(self.current_t)
 
@@ -172,45 +168,36 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
 
         dist = float(np.linalg.norm(error_pos))
         vel_err = float(np.linalg.norm(error_vel))
+        stability_penalty = abs(roll) + abs(pitch)
 
-        p = self._scalar(obs["p"])
-        q = self._scalar(obs["q"])
-        r = self._scalar(obs["r"])
-        ang_vel_penalty = float(np.linalg.norm([p, q, r]))
-
-        thrust_effort = float(np.mean((action / 40.0) ** 2))
-        thrust_rate = float(np.mean(((action - self.prev_action) / 40.0) ** 2))
-        self.prev_action = action.copy()
-
-        stability_penalty = roll**2 + pitch**2
-
+        # Original reward strategy adapted to trajectory error:
+        # position + velocity + yaw + roll/pitch + success bonus.
         reward = -(
-            2.0 * dist
-            + 0.3 * vel_err
+            1.0 * dist
+            + 0.1 * vel_err
             + 0.5 * abs(yaw_error)
-            + 0.2 * ang_vel_penalty
-            + 0.8 * stability_penalty
-            + 0.02 * thrust_effort
-            + 0.01 * thrust_rate
+            + 0.5 * stability_penalty
         )
 
         if dist < 0.20:
-            reward += 2.0
+            reward += 1.0
 
-        if dist > 3.0:
+        info["done_reason"] = "none"
+        info["is_success"] = bool(dist < 0.20)
+
+        if dist > 5.0:
             terminated = True
             reward -= 10.0
+            info["done_reason"] = "distance"
 
         if abs(roll) > 1.2 or abs(pitch) > 1.2:
             terminated = True
             reward -= 10.0
+            info["done_reason"] = "attitude"
 
         info["tracking_error"] = dist
         info["velocity_error"] = vel_err
         info["yaw_error"] = float(yaw_error)
-        info["angular_velocity_penalty"] = ang_vel_penalty
-        info["thrust_effort"] = thrust_effort
-        info["thrust_rate"] = thrust_rate
 
         return obs, float(reward), terminated, truncated, info
 
@@ -244,14 +231,14 @@ def train():
         policy="MultiInputPolicy",
         env=env,
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=1e-4,
         n_steps=2048,
         batch_size=64,
         n_epochs=10,
         gamma=0.99,
         gae_lambda=0.95,
-        clip_range=0.2,
-        ent_coef=0.01,
+        clip_range=0.1,
+        ent_coef=0.005,
         vf_coef=0.5,
         max_grad_norm=0.5,
         tensorboard_log="./ppo_traj_tensorboard/",
