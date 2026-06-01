@@ -6,19 +6,49 @@ import math
 from gymnasium.envs.registration import register
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
-from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import CheckpointCallback, BaseCallback
+from stable_baselines3.common.monitor import Monitor
 
 import bluerov2_gym.envs.bluerov_env as original_env
 
 
+ENV_ID = "BlueRov-v0"
+
+
 try:
     register(
-        id="BlueRov-v0",
+        id=ENV_ID,
         entry_point="bluerov2_gym.envs.bluerov_env:BlueRov",
         max_episode_steps=2000,
     )
 except gym.error.Error:
     pass
+
+
+class TensorboardCallback(BaseCallback):
+    def _on_step(self) -> bool:
+        infos = self.locals.get("infos", [])
+
+        for info in infos:
+            if "tracking_error_m" in info:
+                self.logger.record(
+                    "custom/tracking_error_m",
+                    info["tracking_error_m"],
+                )
+
+            if "velocity_error" in info:
+                self.logger.record(
+                    "custom/velocity_error",
+                    info["velocity_error"],
+                )
+
+            if "is_success" in info:
+                self.logger.record(
+                    "custom/is_success",
+                    float(info["is_success"]),
+                )
+
+        return True
 
 
 class TrajectoryGenerator:
@@ -125,27 +155,40 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         obs["y"] = np.array([err_y_body], dtype=np.float32)
         obs["z"] = np.array([err_z_body], dtype=np.float32)
 
-        # Mantido como no original: só substitui u pelo erro de velocidade em x.
         obs["u"] = np.array([error_vel[0]], dtype=np.float32)
 
-        dist = np.linalg.norm(error_pos)
-        vel_err = np.linalg.norm(error_vel)
+        # Main metric: Euclidean trajectory error in meters
+        dist = float(np.linalg.norm(error_pos))
+        vel_err = float(np.linalg.norm(error_vel))
 
-        # Adaptado ao novo action: agora action está em Newtons [-40, 40].
-        # Mantém a ideia original de custo de energia, mas normalizado.
-        act_cost = np.mean((action / 40.0) ** 2)
+        act_cost = float(np.mean((action / 40.0) ** 2))
 
         reward = 1.0 - (2.0 * dist) - (0.1 * vel_err) - (0.001 * act_cost)
+
+        success = dist < 0.20
 
         if dist > 3.0:
             terminated = True
             reward -= 10.0
+            info["done_reason"] = "distance"
+        else:
+            info["done_reason"] = "none"
 
-        info["tracking_error"] = float(dist)
-        info["velocity_error"] = float(vel_err)
-        info["act_cost"] = float(act_cost)
+        info["tracking_error_m"] = dist
+        info["velocity_error"] = vel_err
+        info["act_cost"] = act_cost
+        info["is_success"] = success
 
         return obs, float(reward), terminated, truncated, info
+
+
+def make_env():
+    def _init():
+        env = TrajectoryTrackingEnv()
+        env = Monitor(env, info_keywords=("is_success", "tracking_error_m"))
+        return env
+
+    return _init
 
 
 def train():
@@ -154,7 +197,7 @@ def train():
     os.makedirs("./ppo_traj_tensorboard/", exist_ok=True)
     os.makedirs("./logs/", exist_ok=True)
 
-    env = DummyVecEnv([lambda: TrajectoryTrackingEnv()])
+    env = DummyVecEnv([make_env()])
 
     env = VecNormalize(
         env,
@@ -172,22 +215,28 @@ def train():
         batch_size=64,
         gamma=0.99,
         gae_lambda=0.95,
+        clip_range=0.2,
+        ent_coef=0.01,
         tensorboard_log="./ppo_traj_tensorboard/",
     )
 
     checkpoint_callback = CheckpointCallback(
-        save_freq=50000,
+        save_freq=50_000,
         save_path="./logs/",
         name_prefix="ppo_traj",
     )
 
+    tensorboard_callback = TensorboardCallback()
+
     model.learn(
         total_timesteps=1_000_000,
-        callback=checkpoint_callback,
+        callback=[checkpoint_callback, tensorboard_callback],
+        tb_log_name="PPO_BlueROV2_Trajectory",
     )
 
     model.save("ppo_trajectory_final")
     env.save("vec_normalize.pkl")
+    env.close()
 
     print("Treino concluído! Modelos salvos.")
 
