@@ -12,9 +12,11 @@ from stable_baselines3.common.monitor import Monitor
 import bluerov2_gym.envs.bluerov_env as original_env
 
 
+ENV_ID = "BlueRov-v0"
+
 try:
     register(
-        id="BlueRov-v0",
+        id=ENV_ID,
         entry_point="bluerov2_gym.envs.bluerov_env:BlueRov",
         max_episode_steps=2000,
     )
@@ -60,11 +62,10 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         self.traj = TrajectoryGenerator()
         self.current_t = 0.0
         self.dt = 0.1
+        self.prev_action = np.zeros(6, dtype=np.float32)
 
     def _scalar(self, value):
-        if isinstance(value, np.ndarray):
-            return float(value.item())
-        return float(value)
+        return float(np.asarray(value).reshape(-1)[0])
 
     def _wrap_angle(self, angle):
         return math.atan2(math.sin(angle), math.cos(angle))
@@ -92,8 +93,11 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
         error_vel = curr_vel - target_vel
         yaw_error = self._wrap_angle(yaw - target_att[2])
 
-        c = math.cos(yaw)
-        s = math.sin(yaw)
+        # Rotate the tracking error to the desired trajectory frame
+        # This is more consistent than using the current yaw during training.
+        psi_ref = float(target_att[2])
+        c = math.cos(psi_ref)
+        s = math.sin(psi_ref)
 
         err_x_body = error_pos[0] * c + error_pos[1] * s
         err_y_body = -error_pos[0] * s + error_pos[1] * c
@@ -118,15 +122,15 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed, options=options)
 
-        if seed is not None:
-            np.random.seed(seed)
+        rng = np.random.default_rng(seed)
 
-        self.current_t = np.random.uniform(0.0, 50.0)
+        self.current_t = rng.uniform(0.0, 50.0)
+        self.prev_action[:] = 0.0
 
         target_pos, target_att, _ = self.traj.get_state_at_time(self.current_t)
 
-        noise_pos = np.random.uniform(-0.2, 0.2, 3)
-        noise_yaw = np.random.uniform(-0.2, 0.2)
+        noise_pos = rng.uniform(-0.2, 0.2, 3)
+        noise_yaw = rng.uniform(-0.2, 0.2)
 
         initial_pos = target_pos + noise_pos
 
@@ -159,32 +163,39 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
     def step(self, action):
         self.current_t += self.dt
 
+        action = np.asarray(action, dtype=np.float32).reshape(-1)
+        action = np.clip(action, -40.0, 40.0)
+
         obs, _, terminated, truncated, info = super().step(action)
 
         obs, error_pos, error_vel, yaw_error, roll, pitch = self._error_obs(obs)
 
-        dist = np.linalg.norm(error_pos)
-        vel_err = np.linalg.norm(error_vel)
+        dist = float(np.linalg.norm(error_pos))
+        vel_err = float(np.linalg.norm(error_vel))
 
-        action = np.asarray(action, dtype=np.float32)
-        action = np.clip(action, -40.0, 40.0)
+        p = self._scalar(obs["p"])
+        q = self._scalar(obs["q"])
+        r = self._scalar(obs["r"])
+        ang_vel_penalty = float(np.linalg.norm([p, q, r]))
 
-        thrust_effort = np.mean((action / 40.0) ** 2)
-        thrust_smooth = np.mean(np.abs(action / 40.0))
+        thrust_effort = float(np.mean((action / 40.0) ** 2))
+        thrust_rate = float(np.mean(((action - self.prev_action) / 40.0) ** 2))
+        self.prev_action = action.copy()
 
-        stability_penalty = abs(roll) + abs(pitch)
+        stability_penalty = roll**2 + pitch**2
 
         reward = -(
             2.0 * dist
             + 0.3 * vel_err
             + 0.5 * abs(yaw_error)
-            + 0.5 * stability_penalty
+            + 0.2 * ang_vel_penalty
+            + 0.8 * stability_penalty
             + 0.02 * thrust_effort
-            + 0.005 * thrust_smooth
+            + 0.01 * thrust_rate
         )
 
         if dist < 0.20:
-            reward += 1.0
+            reward += 2.0
 
         if dist > 3.0:
             terminated = True
@@ -194,10 +205,12 @@ class TrajectoryTrackingEnv(original_env.BlueRov):
             terminated = True
             reward -= 10.0
 
-        info["tracking_error"] = float(dist)
-        info["velocity_error"] = float(vel_err)
+        info["tracking_error"] = dist
+        info["velocity_error"] = vel_err
         info["yaw_error"] = float(yaw_error)
-        info["thrust_effort"] = float(thrust_effort)
+        info["angular_velocity_penalty"] = ang_vel_penalty
+        info["thrust_effort"] = thrust_effort
+        info["thrust_rate"] = thrust_rate
 
         return obs, float(reward), terminated, truncated, info
 

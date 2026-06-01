@@ -44,7 +44,6 @@ class TrajectoryGenerator:
 
         vx_d = self.radius * math.cos(ts) * self.speed
         vy_d = self.radius * (math.cos(ts) ** 2 - math.sin(ts) ** 2) * self.speed
-
         yaw_d = math.atan2(vy_d, vx_d)
 
         return (
@@ -55,9 +54,7 @@ class TrajectoryGenerator:
 
 
 def scalar(value):
-    if isinstance(value, np.ndarray):
-        return float(value.item())
-    return float(value)
+    return float(np.asarray(value).reshape(-1)[0])
 
 
 def wrap_angle(angle):
@@ -83,8 +80,9 @@ def build_virtual_obs(obs, pos_d, vel_d, yaw_d):
     error_vel_world = curr_vel - vel_d
     yaw_error = wrap_angle(yaw - yaw_d)
 
-    c = math.cos(yaw)
-    s = math.sin(yaw)
+    # Igual ao treino: erro no referencial da trajetória desejada
+    c = math.cos(yaw_d)
+    s = math.sin(yaw_d)
 
     err_x_body = error_pos_world[0] * c + error_pos_world[1] * s
     err_y_body = -error_pos_world[0] * s + error_pos_world[1] * c
@@ -94,7 +92,10 @@ def build_virtual_obs(obs, pos_d, vel_d, yaw_d):
     vel_y_body = -error_vel_world[0] * s + error_vel_world[1] * c
     vel_z_body = error_vel_world[2]
 
-    virtual_obs = {k: np.asarray(v, dtype=np.float32).copy() for k, v in obs.items()}
+    virtual_obs = {
+        k: np.asarray(v, dtype=np.float32).copy()
+        for k, v in obs.items()
+    }
 
     virtual_obs["x"] = np.array([err_x_body], dtype=np.float32)
     virtual_obs["y"] = np.array([err_y_body], dtype=np.float32)
@@ -147,44 +148,33 @@ def run_trajectory_ppo():
 
         pos_d, vel_d, yaw_d = traj.get_reference(t)
 
-        (
-            virtual_obs,
-            curr_pos,
-            curr_vel,
-            error_pos_world,
-            error_vel_world,
-            yaw_error,
-        ) = build_virtual_obs(obs, pos_d, vel_d, yaw_d)
+        virtual_obs, curr_pos, curr_vel, error_pos_world, error_vel_world, yaw_error = (
+            build_virtual_obs(obs, pos_d, vel_d, yaw_d)
+        )
 
         norm_obs = venv.normalize_obs(virtual_obs)
 
         action, _ = model.predict(norm_obs, deterministic=True)
-
         action = np.asarray(action, dtype=np.float32).reshape(-1)
         action = np.clip(action, -40.0, 40.0)
 
         obs, _, terminated, truncated, info = env.step(action)
 
-        dist_error = np.linalg.norm(error_pos_world)
-        vel_error = np.linalg.norm(error_vel_world)
+        dist_error = float(np.linalg.norm(error_pos_world))
+        vel_error = float(np.linalg.norm(error_vel_world))
 
         data.append([
             t,
-            curr_pos[0],
-            curr_pos[1],
-            curr_pos[2],
-            pos_d[0],
-            pos_d[1],
-            pos_d[2],
+            curr_pos[0], curr_pos[1], curr_pos[2],
+            pos_d[0], pos_d[1], pos_d[2],
+            curr_vel[0], curr_vel[1], curr_vel[2],
+            vel_d[0], vel_d[1], vel_d[2],
             dist_error,
             vel_error,
             yaw_error,
-            action[0],
-            action[1],
-            action[2],
-            action[3],
-            action[4],
-            action[5],
+            yaw_d,
+            action[0], action[1], action[2],
+            action[3], action[4], action[5],
         ])
 
         if i % 100 == 0:
@@ -203,21 +193,15 @@ def run_trajectory_ppo():
         writer = csv.writer(f)
         writer.writerow([
             "time",
-            "x",
-            "y",
-            "z",
-            "x_ref",
-            "y_ref",
-            "z_ref",
+            "x", "y", "z",
+            "x_ref", "y_ref", "z_ref",
+            "u", "v", "w",
+            "u_ref", "v_ref", "w_ref",
             "position_error",
             "velocity_error",
             "yaw_error",
-            "T1",
-            "T2",
-            "T3",
-            "T4",
-            "T5",
-            "T6",
+            "yaw_ref",
+            "T1", "T2", "T3", "T4", "T5", "T6",
         ])
         writer.writerows(data)
 

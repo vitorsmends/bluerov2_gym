@@ -37,7 +37,6 @@ class Dynamics:
         self.y_size = 0.25
         self.z_size = 0.10
 
-        # Same buoyancy correction used in the Xacro
         self.buoyant_correction = 1.01 * (
             self.m / (self.rho * self.x_size * self.y_size * self.z_size)
         ) ** (1.0 / 3.0)
@@ -49,63 +48,77 @@ class Dynamics:
             * self.buoyant_correction**3
         )
 
-        # Center of buoyancy and gravity from Xacro
-        self.z_cob = -self.buoyant_correction * self.z_size / 4.0
-        self.z_cog = -self.buoyant_correction * self.z_size
+        # Xacro:
+        # z_cob = -buoyant_correction*z_size/4
+        # z_cog = -buoyant_correction*z_size
+        self.r_g = np.array(
+            [0.0, 0.0, -self.buoyant_correction * self.z_size],
+            dtype=float,
+        )
 
-        # Vertical distance between CG and CB
+        self.r_b = np.array(
+            [0.0, 0.0, -self.buoyant_correction * self.z_size / 4.0],
+            dtype=float,
+        )
+
+        self.z_cog = self.r_g[2]
+        self.z_cob = self.r_b[2]
         self.coBM = abs(self.z_cob - self.z_cog)
 
         self.W = self.m * self.g
         self.B_force = self.rho * self.g * self.volume
 
         # ------------------------------------------------------------
-        # Rigid-body inertia from Xacro + added mass from hydrodynamics.xacro
+        # Rigid-body inertia from Xacro
+        # URDF inertia terms are expressed at the inertial origin.
         # ------------------------------------------------------------
         self.Ixx = 5.2539
+        self.Ixy = 0.0144
+        self.Ixz = 0.3341
         self.Iyy = 7.9420
+        self.Iyz = 0.0260
         self.Izz = 6.9123
 
-        self.added_mass = np.array([
-            5.5,
-            12.7,
-            14.57,
-            0.12,
-            0.12,
-            0.12
-        ], dtype=float)
+        self.I_g = np.array(
+            [
+                [self.Ixx, self.Ixy, self.Ixz],
+                [self.Ixy, self.Iyy, self.Iyz],
+                [self.Ixz, self.Iyz, self.Izz],
+            ],
+            dtype=float,
+        )
 
-        self.M_diag = np.array([
-            self.m,
-            self.m,
-            self.m,
-            self.Ixx,
-            self.Iyy,
-            self.Izz
-        ], dtype=float) + self.added_mass
+        self.M_RB = self._rigid_body_mass_matrix()
+
+        # ------------------------------------------------------------
+        # Added mass from hydrodynamics.xacro
+        # XML values are negative, e.g. xDotU = -5.5.
+        # Here we store the positive added-mass contribution.
+        # ------------------------------------------------------------
+        self.added_mass = np.array(
+            [5.5, 12.7, 14.57, 0.12, 0.12, 0.12],
+            dtype=float,
+        )
+
+        self.M_A = np.diag(self.added_mass)
+
+        # Total inertia matrix
+        self.M = self.M_RB + self.M_A
 
         # ------------------------------------------------------------
         # Hydrodynamic damping from hydrodynamics.xacro
-        # Plugin values are negative, but here we store positive damping.
+        # Plugin values are negative; here we store positive damping.
         # damping = D_lin * nu_rel + D_quad * nu_rel * abs(nu_rel)
         # ------------------------------------------------------------
-        self.D_lin = np.array([
-            25.15,
-            7.364,
-            17.955,
-            10.888,
-            20.761,
-            3.744
-        ], dtype=float)
+        self.D_lin = np.array(
+            [25.15, 7.364, 17.955, 10.888, 20.761, 3.744],
+            dtype=float,
+        )
 
-        self.D_quad = np.array([
-            33.8,
-            54.26875,
-            73.37135,
-            40.0,
-            40.0,
-            40.0
-        ], dtype=float)
+        self.D_quad = np.array(
+            [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0],
+            dtype=float,
+        )
 
         # ------------------------------------------------------------
         # Thruster allocation matrix from thrusters.xacro
@@ -115,14 +128,17 @@ class Dynamics:
         self.thruster_min = -40.0
         self.thruster_max = 40.0
 
-        self.allocation_matrix = np.array([
-            [ 0.70710678,  0.70710678,  0.70710678,  0.70710678,  0.0,     0.0    ],
-            [ 0.70710678, -0.70710678, -0.70710678,  0.70710678,  0.0,     0.0    ],
-            [ 0.0,         0.0,         0.0,         0.0,         1.0,    -1.0    ],
-            [ 0.05126524, -0.05126524, -0.05126524,  0.05126524, -0.1105, -0.1105 ],
-            [-0.05126524, -0.05126524, -0.05126524, -0.05126524, -0.0025,  0.0025 ],
-            [ 0.16652365, -0.16652365,  0.17500893, -0.17500893,  0.0,     0.0    ],
-        ], dtype=float)
+        self.allocation_matrix = np.array(
+            [
+                [0.70710678, 0.70710678, 0.70710678, 0.70710678, 0.0, 0.0],
+                [0.70710678, -0.70710678, -0.70710678, 0.70710678, 0.0, 0.0],
+                [0.0, 0.0, 0.0, 0.0, 1.0, -1.0],
+                [0.05126524, -0.05126524, -0.05126524, 0.05126524, -0.1105, -0.1105],
+                [-0.05126524, -0.05126524, -0.05126524, -0.05126524, -0.0025, 0.0025],
+                [0.16652365, -0.16652365, 0.17500893, -0.17500893, 0.0, 0.0],
+            ],
+            dtype=float,
+        )
 
         # ------------------------------------------------------------
         # JONSWAP + filtered Gaussian noise disturbance
@@ -140,6 +156,86 @@ class Dynamics:
             alpha_noise=0.3,
             seed=42,
         )
+
+    # ============================================================
+    # Matrix utilities
+    # ============================================================
+
+    @staticmethod
+    def _skew(a):
+        a = np.asarray(a, dtype=float).reshape(3)
+
+        return np.array(
+            [
+                [0.0, -a[2], a[1]],
+                [a[2], 0.0, -a[0]],
+                [-a[1], a[0], 0.0],
+            ],
+            dtype=float,
+        )
+
+    def _rigid_body_mass_matrix(self):
+        """
+        Rigid-body mass matrix with center of gravity offset.
+
+        M_RB =
+        [ mI        -mS(r_g) ]
+        [ mS(r_g)    I_g     ]
+
+        where r_g is the vector from body origin to CG.
+        """
+
+        I3 = np.eye(3)
+        S_rg = self._skew(self.r_g)
+
+        upper = np.hstack((self.m * I3, -self.m * S_rg))
+        lower = np.hstack((self.m * S_rg, self.I_g))
+
+        return np.vstack((upper, lower))
+
+    def _spatial_cross_force(self, nu):
+        """
+        Spatial force cross-product operator for 6-DoF vectors ordered as
+
+            nu = [u, v, w, p, q, r]
+
+        This is used to compute Coriolis/centripetal generalized forces as
+
+            c(nu) = cross_force(nu) @ M @ nu
+        """
+
+        v = np.asarray(nu[0:3], dtype=float)
+        omega = np.asarray(nu[3:6], dtype=float)
+
+        S_v = self._skew(v)
+        S_w = self._skew(omega)
+
+        upper = np.hstack((S_w, S_v))
+        lower = np.hstack((np.zeros((3, 3)), S_w))
+
+        return np.vstack((upper, lower))
+
+    def _rigid_body_coriolis_force(self, nu):
+        """
+        Rigid-body Coriolis/centripetal generalized force.
+        """
+
+        return self._spatial_cross_force(nu) @ (self.M_RB @ nu)
+
+    def _added_mass_coriolis_force(self, nu_rel):
+        """
+        Added-mass Coriolis/centripetal generalized force.
+
+        Uses the same spatial-force construction with the added-mass matrix.
+        This makes the numerical model much closer to the hydrodynamic
+        formulation used by Gazebo than the previous diagonal-only update.
+        """
+
+        return self._spatial_cross_force(nu_rel) @ (self.M_A @ nu_rel)
+
+    # ============================================================
+    # JONSWAP disturbance
+    # ============================================================
 
     def _init_jonswap(
         self,
@@ -210,11 +306,14 @@ class Dynamics:
         for omega, a, phase in self._waves:
             u_wave += a * omega * np.cos(omega * self._t + phase)
 
-        nu_wave = np.array([
-            u_wave * self.wave_dir[0],
-            u_wave * self.wave_dir[1],
-            0.0
-        ])
+        nu_wave = np.array(
+            [
+                u_wave * self.wave_dir[0],
+                u_wave * self.wave_dir[1],
+                0.0,
+            ],
+            dtype=float,
+        )
 
         nu_wave *= self.scale
 
@@ -240,6 +339,10 @@ class Dynamics:
 
         return self._nu_c_filt.copy()
 
+    # ============================================================
+    # Forces and kinematics
+    # ============================================================
+
     def _thrusters_to_tau(self, action):
         thrust = np.asarray(action, dtype=float)
 
@@ -250,7 +353,6 @@ class Dynamics:
             )
 
         thrust = np.clip(thrust, self.thruster_min, self.thruster_max)
-
         tau = self.allocation_matrix @ thrust
 
         return tau, thrust
@@ -259,23 +361,24 @@ class Dynamics:
         """
         Hydrostatic restoring vector.
 
-        g_eta follows the same convention used in the dynamics equation:
+        The equation is consistent with:
 
-            M * nu_dot = tau - damping - g_eta
-
-        Positive buoyancy means B_force > W.
+            M nu_dot + C(nu)nu + D(nu_r) + g(eta) = tau
         """
 
         weight_minus_buoyancy = self.W - self.B_force
 
-        g_eta = np.array([
-            weight_minus_buoyancy * np.sin(theta),
-            -weight_minus_buoyancy * np.cos(theta) * np.sin(phi),
-            -weight_minus_buoyancy * np.cos(theta) * np.cos(phi),
-            self.coBM * self.W * np.cos(theta) * np.sin(phi),
-            self.coBM * self.W * np.sin(theta),
-            0.0
-        ], dtype=float)
+        g_eta = np.array(
+            [
+                weight_minus_buoyancy * np.sin(theta),
+                -weight_minus_buoyancy * np.cos(theta) * np.sin(phi),
+                -weight_minus_buoyancy * np.cos(theta) * np.cos(phi),
+                self.coBM * self.W * np.cos(theta) * np.sin(phi),
+                self.coBM * self.W * np.sin(theta),
+                0.0,
+            ],
+            dtype=float,
+        )
 
         return g_eta
 
@@ -308,6 +411,7 @@ class Dynamics:
         )
 
         c_th_safe = c_th
+
         if abs(c_th_safe) < 1e-6:
             c_th_safe = np.sign(c_th_safe) * 1e-6 if c_th_safe != 0 else 1e-6
 
@@ -315,59 +419,64 @@ class Dynamics:
         d_theta = q * c_phi - r * s_phi
         d_psi = (q * s_phi + r * c_phi) / c_th_safe
 
-        eta_dot = np.array([
-            dx,
-            dy,
-            dz,
-            d_phi,
-            d_theta,
-            d_psi
-        ], dtype=float)
+        return np.array(
+            [dx, dy, dz, d_phi, d_theta, d_psi],
+            dtype=float,
+        )
 
-        return eta_dot
+    @staticmethod
+    def _wrap_angle(angle):
+        return np.arctan2(np.sin(angle), np.cos(angle))
+
+    # ============================================================
+    # Step
+    # ============================================================
 
     def step(self, state, action):
         """
         Advances the dynamics one step.
 
-        Parameters
-        ----------
-        state : dict
-            Vehicle state dictionary.
+        Dynamics solved:
 
-        action : array-like, shape (6,)
-            Direct thruster commands in Newtons:
-            [T1, T2, T3, T4, T5, T6]
+            M nu_dot =
+                tau
+                - C_RB(nu)
+                - C_A(nu_r)
+                - D(nu_r)
+                - g(eta)
 
-        Returns
-        -------
-        state : dict
-            Updated state.
+        where action = [T1, T2, T3, T4, T5, T6].
         """
 
         nu_c = self._jonswap_current()
 
-        eta = np.array([
-            state["x"],
-            state["y"],
-            state["z"],
-            state["roll"],
-            state["pitch"],
-            state["yaw"],
-        ], dtype=float)
+        eta = np.array(
+            [
+                state["x"],
+                state["y"],
+                state["z"],
+                state["roll"],
+                state["pitch"],
+                state["yaw"],
+            ],
+            dtype=float,
+        )
 
-        nu = np.array([
-            state["u"],
-            state["v"],
-            state["w"],
-            state["p"],
-            state["q"],
-            state["r"],
-        ], dtype=float)
+        nu = np.array(
+            [
+                state["u"],
+                state["v"],
+                state["w"],
+                state["p"],
+                state["q"],
+                state["r"],
+            ],
+            dtype=float,
+        )
 
         phi, theta = eta[3], eta[4]
 
-        # Thruster allocation
+        # Thruster generalized forces
         tau, saturated_thrust = self._thrusters_to_tau(action)
 
         # Current-relative velocity
@@ -383,28 +492,44 @@ class Dynamics:
         # Hydrostatic restoring forces
         g_eta = self._restoring_forces(phi, theta)
 
-        # Body acceleration
-        nu_dot = (tau - damping - g_eta) / self.M_diag
+        # Coriolis/centripetal generalized forces
+        c_rb = self._rigid_body_coriolis_force(nu)
+        c_a = self._added_mass_coriolis_force(nu_rel)
 
-        # Semi-implicit Euler
+        rhs = tau - c_rb - c_a - damping - g_eta
+
+        # Full 6x6 solve instead of diagonal division
+        nu_dot = np.linalg.solve(self.M, rhs)
+
+        # Semi-implicit Euler integration
         new_nu = nu + nu_dot * self.dt
+
         eta_dot = self._body_to_world_kinematics(eta, new_nu)
         new_eta = eta + eta_dot * self.dt
 
-        # Update state
+        new_eta[3] = self._wrap_angle(new_eta[3])
+        new_eta[4] = self._wrap_angle(new_eta[4])
+        new_eta[5] = self._wrap_angle(new_eta[5])
+
         keys_eta = ["x", "y", "z", "roll", "pitch", "yaw"]
         keys_nu = ["u", "v", "w", "p", "q", "r"]
 
         for i, key in enumerate(keys_eta):
-            state[key] = new_eta[i]
+            state[key] = float(new_eta[i])
 
         for i, key in enumerate(keys_nu):
-            state[key] = new_nu[i]
+            state[key] = float(new_nu[i])
 
-        # Optional debug fields
+        # Debug fields
         state["thrusters"] = saturated_thrust.copy()
         state["tau"] = tau.copy()
         state["nu_current"] = nu_c.copy()
+        state["nu_rel"] = nu_rel.copy()
+        state["nu_dot"] = nu_dot.copy()
+        state["coriolis_rb"] = c_rb.copy()
+        state["coriolis_added"] = c_a.copy()
+        state["damping"] = damping.copy()
+        state["restoring"] = g_eta.copy()
 
         return state
 
