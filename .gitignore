@@ -9,6 +9,7 @@ __pycache__/
 *.pdf
 *.zip
 *.pkl
+*.json
 ppo_traj_tensorboard/
 bluerov_tensorboard/
 

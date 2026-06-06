@@ -5,8 +5,8 @@ import matplotlib.pyplot as plt
 
 
 INPUT_DIR = "results/path_tracking"
-OUTPUT_DIR = "plots_path_tracking"
-TABLE_DIR = "tables_path_tracking"
+OUTPUT_DIR = "results/plots_path_tracking"
+TABLE_DIR = "results/tables_path_tracking"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(TABLE_DIR, exist_ok=True)
@@ -14,7 +14,7 @@ os.makedirs(TABLE_DIR, exist_ok=True)
 
 CONFIG = {
     "PID": {"file": "pid.csv", "ls": "-"},
-    "MPC": {"file": "mpc.csv", "ls": "--"},
+    "MPC": {"file": "nmpc.csv", "ls": "--"},
     "PPO": {"file": "ppo.csv", "ls": "-."},
 }
 
