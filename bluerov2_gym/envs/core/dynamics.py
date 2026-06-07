@@ -144,8 +144,8 @@ class Dynamics:
         # JONSWAP + filtered Gaussian noise disturbance
         # ------------------------------------------------------------
         self._init_jonswap(
-            Hs=1.0,
-            Tp=6.0,
+            Hs=2.0,
+            Tp=12.0,
             gamma=3.3,
             N=64,
             wave_dir=(0.5, 0.5),

@@ -24,6 +24,7 @@ def main():
     run_path_tracking_experiment(
         controller=controller,
         trajectory=trajectory,
+        repetitions=10,
         output_csv="results/path_tracking/nmpc.csv",
         steps=1000,
         dt=0.1,

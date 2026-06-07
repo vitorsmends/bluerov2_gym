@@ -42,9 +42,11 @@ def run_path_tracking_experiment(
     output_csv: str,
     steps: int = 1000,
     dt: float = 0.1,
+    repetitions: int = 1,
+    seed: int | None = 42,
     render_mode=None,
 ):
-    """Run a path-tracking experiment and save a CSV log.
+    """Run repeated path-tracking experiments and save a CSV log.
 
     The controller must implement:
 
@@ -56,68 +58,88 @@ def run_path_tracking_experiment(
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     env = make_env(render_mode=render_mode)
-    obs, _ = env.reset()
-
-    if hasattr(controller, "reset"):
-        controller.reset()
 
     rows = []
     start = time.time()
 
-    for k in range(steps):
-        t = k * dt
+    for rep in range(repetitions):
+        rep_seed = None if seed is None else int(seed + rep)
 
-        state = obs_to_state(obs)
-        reference = trajectory.get_reference(t)
-        errors = tracking_errors(state, reference)
+        try:
+            obs, _ = env.reset(seed=rep_seed)
+        except TypeError:
+            obs, _ = env.reset()
 
-        action = controller.get_action(
-            obs=obs,
-            state=state,
-            reference=reference,
-            t=t,
+        if hasattr(controller, "reset"):
+            controller.reset()
+
+        print(
+            f"\n[INFO] Starting repetition {rep + 1}/{repetitions} "
+            f"for {controller.__class__.__name__} | seed={rep_seed}"
         )
 
-        controller_metrics = _get_controller_metrics(controller)
+        for k in range(steps):
+            t = k * dt
 
-        action = np.asarray(action, dtype=np.float32).reshape(-1)
-        action = np.clip(action, -40.0, 40.0)
+            state = obs_to_state(obs)
+            reference = trajectory.get_reference(t)
+            errors = tracking_errors(state, reference)
 
-        obs, reward, terminated, truncated, info = env.step(action)
-
-        rows.append([
-            t,
-            state[0], state[1], state[2],
-            state[3], state[4], state[5],
-            state[6], state[7], state[8],
-            state[9], state[10], state[11],
-            reference[0], reference[1], reference[2],
-            reference[5],
-            errors["tracking_error_m"],
-            errors["velocity_error"],
-            errors["yaw_error"],
-            reward,
-            action[0], action[1], action[2],
-            action[3], action[4], action[5],
-            *controller_metrics,
-        ])
-
-        if k % 50 == 0:
-            print(
-                f"[{controller.__class__.__name__}] "
-                f"step={k:04d}/{steps} | t={t:5.1f}s | "
-                f"tracking_error={errors['tracking_error_m']:.3f} m | "
-                f"reward={reward:.3f}"
+            action = controller.get_action(
+                obs=obs,
+                state=state,
+                reference=reference,
+                t=t,
             )
 
-        if terminated or truncated:
-            print(f"[INFO] Episode finished at t={t:.1f}s")
-            break
+            controller_metrics = _get_controller_metrics(controller)
+
+            action = np.asarray(action, dtype=np.float32).reshape(-1)
+            action = np.clip(action, -40.0, 40.0)
+
+            obs, reward, terminated, truncated, info = env.step(action)
+
+            rows.append([
+                rep,
+                rep_seed,
+                t,
+                state[0], state[1], state[2],
+                state[3], state[4], state[5],
+                state[6], state[7], state[8],
+                state[9], state[10], state[11],
+                reference[0], reference[1], reference[2],
+                reference[5],
+                errors["tracking_error_m"],
+                errors["velocity_error"],
+                errors["yaw_error"],
+                reward,
+                action[0], action[1], action[2],
+                action[3], action[4], action[5],
+                *controller_metrics,
+            ])
+
+            if k % 50 == 0:
+                print(
+                    f"[{controller.__class__.__name__}] "
+                    f"rep={rep + 1:02d}/{repetitions} | "
+                    f"step={k:04d}/{steps} | t={t:5.1f}s | "
+                    f"tracking_error={errors['tracking_error_m']:.3f} m | "
+                    f"reward={reward:.3f}"
+                )
+
+            if terminated or truncated:
+                print(
+                    f"[INFO] Episode finished at t={t:.1f}s | "
+                    f"rep={rep + 1}/{repetitions}"
+                )
+                break
 
     with output_path.open("w", newline="") as f:
         writer = csv.writer(f)
 
         writer.writerow([
+            "repetition_id",
+            "seed",
             "time",
             "x", "y", "z",
             "roll", "pitch", "yaw",
@@ -137,4 +159,5 @@ def run_path_tracking_experiment(
     elapsed = time.time() - start
 
     print(f"[INFO] Saved results to: {output_path}")
+    print(f"[INFO] Repetitions: {repetitions}")
     print(f"[INFO] Elapsed time: {elapsed:.2f} s")

@@ -19,6 +19,7 @@ def main():
         trajectory=trajectory,
         output_csv="results/path_tracking/pid.csv",
         steps=1000,
+        repetitions=10,
         dt=0.1,
     )
 
