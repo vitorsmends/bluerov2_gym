@@ -3,13 +3,37 @@
 from __future__ import annotations
 
 import csv
-import os
 import time
 from pathlib import Path
 
 import numpy as np
 
 from env_utils import make_env, obs_to_state, tracking_errors
+
+
+METRIC_COLUMNS = [
+    "controller_wall_time_s",
+    "controller_cpu_time_s",
+    "controller_frequency_hz",
+    "controller_prepare_time_s",
+    "controller_solver_time_s",
+    "controller_post_time_s",
+    "controller_success",
+]
+
+
+def _get_controller_metrics(controller):
+    metrics = getattr(controller, "last_metrics", {})
+
+    return [
+        metrics.get("controller_wall_time_s", np.nan),
+        metrics.get("controller_cpu_time_s", np.nan),
+        metrics.get("controller_frequency_hz", np.nan),
+        metrics.get("controller_prepare_time_s", np.nan),
+        metrics.get("controller_solver_time_s", np.nan),
+        metrics.get("controller_post_time_s", np.nan),
+        metrics.get("controller_success", np.nan),
+    ]
 
 
 def run_path_tracking_experiment(
@@ -42,11 +66,20 @@ def run_path_tracking_experiment(
 
     for k in range(steps):
         t = k * dt
+
         state = obs_to_state(obs)
         reference = trajectory.get_reference(t)
         errors = tracking_errors(state, reference)
 
-        action = controller.get_action(obs=obs, state=state, reference=reference, t=t)
+        action = controller.get_action(
+            obs=obs,
+            state=state,
+            reference=reference,
+            t=t,
+        )
+
+        controller_metrics = _get_controller_metrics(controller)
+
         action = np.asarray(action, dtype=np.float32).reshape(-1)
         action = np.clip(action, -40.0, 40.0)
 
@@ -64,7 +97,9 @@ def run_path_tracking_experiment(
             errors["velocity_error"],
             errors["yaw_error"],
             reward,
-            action[0], action[1], action[2], action[3], action[4], action[5],
+            action[0], action[1], action[2],
+            action[3], action[4], action[5],
+            *controller_metrics,
         ])
 
         if k % 50 == 0:
@@ -81,6 +116,7 @@ def run_path_tracking_experiment(
 
     with output_path.open("w", newline="") as f:
         writer = csv.writer(f)
+
         writer.writerow([
             "time",
             "x", "y", "z",
@@ -91,10 +127,14 @@ def run_path_tracking_experiment(
             "tracking_error_m", "velocity_error", "yaw_error",
             "reward",
             "T1", "T2", "T3", "T4", "T5", "T6",
+            *METRIC_COLUMNS,
         ])
+
         writer.writerows(rows)
 
     env.close()
+
     elapsed = time.time() - start
+
     print(f"[INFO] Saved results to: {output_path}")
     print(f"[INFO] Elapsed time: {elapsed:.2f} s")

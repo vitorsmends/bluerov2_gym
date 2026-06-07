@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import gymnasium as gym
@@ -31,6 +32,23 @@ class PPOController(BaseController):
 
         self.model = PPO.load(str(self.model_path))
 
+        self.last_metrics = self._empty_metrics()
+
+    def reset(self):
+        self.last_metrics = self._empty_metrics()
+
+    @staticmethod
+    def _empty_metrics():
+        return {
+            "controller_wall_time_s": 0.0,
+            "controller_cpu_time_s": 0.0,
+            "controller_frequency_hz": np.nan,
+            "controller_prepare_time_s": 0.0,
+            "controller_solver_time_s": 0.0,
+            "controller_post_time_s": 0.0,
+            "controller_success": 1,
+        }
+
     @staticmethod
     def _resolve_file(path: str) -> Path:
         candidates = [
@@ -39,14 +57,51 @@ class PPOController(BaseController):
             Path("models") / path,
             Path("models") / (path + ".zip" if not path.endswith(".zip") else path),
         ]
+
         for candidate in candidates:
             if candidate.exists():
                 return candidate
+
         raise FileNotFoundError(f"Could not find file for path: {path}")
 
     def get_action(self, obs, state, reference, t):
+        wall_total_start = time.perf_counter()
+        cpu_total_start = time.process_time()
+
+        prepare_start = time.perf_counter()
+
         virtual_obs = build_tracking_observation(obs, reference)
         norm_obs = self.vec_env.normalize_obs(virtual_obs)
-        action, _ = self.model.predict(norm_obs, deterministic=True)
+
+        prepare_time = time.perf_counter() - prepare_start
+
+        solver_start = time.perf_counter()
+
+        action, _ = self.model.predict(
+            norm_obs,
+            deterministic=True,
+        )
+
+        solver_time = time.perf_counter() - solver_start
+
+        post_start = time.perf_counter()
+
         action = np.asarray(action, dtype=np.float32).reshape(-1)
-        return np.clip(action, -40.0, 40.0)
+        action = np.clip(action, -40.0, 40.0)
+
+        post_time = time.perf_counter() - post_start
+
+        wall_total = time.perf_counter() - wall_total_start
+        cpu_total = time.process_time() - cpu_total_start
+
+        self.last_metrics = {
+            "controller_wall_time_s": float(wall_total),
+            "controller_cpu_time_s": float(cpu_total),
+            "controller_frequency_hz": float(1.0 / wall_total) if wall_total > 0.0 else np.nan,
+            "controller_prepare_time_s": float(prepare_time),
+            "controller_solver_time_s": float(solver_time),
+            "controller_post_time_s": float(post_time),
+            "controller_success": 1,
+        }
+
+        return action

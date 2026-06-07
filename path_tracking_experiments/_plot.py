@@ -13,9 +13,17 @@ os.makedirs(TABLE_DIR, exist_ok=True)
 
 
 CONFIG = {
-    "PID": {"file": "pid.csv", "ls": "-"},
-    "MPC": {"file": "nmpc.csv", "ls": "--"},
-    "PPO": {"file": "ppo.csv", "ls": "-."},
+
+    "PID": {"file": "pid.csv", "color": "#1f77b4", "ls": "-"},
+
+    "SMC": {"file": "smc.csv", "color": "#9467bd", "ls": "-"},
+
+    # "MPC": {"file": "mpc.csv", "color": "#d62728", "ls": "-"},
+
+    "NMPC": {"file": "nmpc.csv", "color": "#ff7f0e", "ls": "-"},
+
+    "PPO": {"file": "ppo.csv", "color": "#2ca02c", "ls": "-"},
+
 }
 
 

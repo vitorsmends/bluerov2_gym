@@ -1,18 +1,9 @@
-"""CasADi/IPOPT NMPC controller for BlueROV2 path tracking.
-
-Class name is kept as NMPCController.
-
-This implementation:
-    - uses CasADi symbolic prediction;
-    - uses IPOPT instead of scipy SLSQP;
-    - keeps move blocking: N=10, control_blocks=5;
-    - predicts JONSWAP current as an exogenous parameter;
-    - commands the six thrusters directly.
-"""
+"""CasADi/IPOPT NMPC controller for BlueROV2 path tracking."""
 
 from __future__ import annotations
 
 import copy
+import time
 import numpy as np
 import casadi as ca
 
@@ -22,18 +13,10 @@ from base_controller import BaseController
 class NMPCController(BaseController):
     name = "nmpc"
 
-    def __init__(
-        self,
-        trajectory,
-        dynamics,
-        dt: float = 0.1,
-        horizon: int = 10,
-        control_blocks: int = 5,
-    ):
+    def __init__(self, trajectory, dynamics, dt: float = 0.1, horizon: int = 10, control_blocks: int = 5):
         self.trajectory = trajectory
         self.dyn = dynamics
         self.dt = float(dt)
-
         self.N = int(horizon)
         self.control_blocks = int(control_blocks)
 
@@ -41,10 +24,7 @@ class NMPCController(BaseController):
             raise ValueError("horizon must be divisible by control_blocks.")
 
         self.block_size = self.N // self.control_blocks
-
-        self.nx = 12
-        self.nu = 6
-        self.nc = 3
+        self.nx, self.nu, self.nc = 12, 6, 3
 
         self.u_min = -40.0
         self.u_max = 40.0
@@ -52,6 +32,8 @@ class NMPCController(BaseController):
 
         self.prev_u = np.zeros(6, dtype=float)
         self.last_block_solution = np.zeros((self.control_blocks, 6), dtype=float)
+
+        self.last_metrics = self._empty_metrics()
 
         self.Q = np.diag([
             55.555556, 55.555556, 80.000000,
@@ -79,12 +61,27 @@ class NMPCController(BaseController):
     def reset(self):
         self.prev_u[:] = 0.0
         self.last_block_solution[:] = 0.0
+        self.last_metrics = self._empty_metrics()
 
-    # ------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------
+    @staticmethod
+    def _empty_metrics():
+        return {
+            "controller_wall_time_s": 0.0,
+            "controller_cpu_time_s": 0.0,
+            "controller_frequency_hz": np.nan,
+            "controller_prepare_time_s": 0.0,
+            "controller_solver_time_s": 0.0,
+            "controller_post_time_s": 0.0,
+            "controller_success": 0,
+        }
 
     def get_action(self, obs, state, reference, t):
+        wall_total_start = time.perf_counter()
+        cpu_total_start = time.process_time()
+        success = 0
+
+        prepare_start = time.perf_counter()
+
         x0 = self._pack_state(state)
         current_forecast = self._forecast_current_sequence()
         ref_sequence = self._build_reference_sequence(t)
@@ -101,55 +98,58 @@ class NMPCController(BaseController):
         lbx = np.ones(self.control_blocks * 6) * self.u_min
         ubx = np.ones(self.control_blocks * 6) * self.u_max
 
+        prepare_time = time.perf_counter() - prepare_start
+
+        solver_start = time.perf_counter()
+
         try:
-            sol = self.solver(
-                x0=u0,
-                lbx=lbx,
-                ubx=ubx,
-                p=p,
-            )
+            sol = self.solver(x0=u0, lbx=lbx, ubx=ubx, p=p)
+            solver_time = time.perf_counter() - solver_start
 
             u_blocks = np.array(sol["x"]).reshape(self.control_blocks, 6)
 
             if np.all(np.isfinite(u_blocks)):
                 self.last_block_solution = u_blocks.copy()
                 action = u_blocks[0].copy()
+                success = 1
             else:
                 action = self.prev_u.copy()
 
         except Exception:
+            solver_time = time.perf_counter() - solver_start
             action = self.prev_u.copy()
 
-        delta_u = np.clip(
-            action - self.prev_u,
-            -self.max_delta_u,
-            self.max_delta_u,
-        )
+        post_start = time.perf_counter()
 
+        delta_u = np.clip(action - self.prev_u, -self.max_delta_u, self.max_delta_u)
         action = self.prev_u + delta_u
         action = np.clip(action, self.u_min, self.u_max)
-
         self.prev_u = action.copy()
 
-        return action.astype(np.float32)
+        post_time = time.perf_counter() - post_start
 
-    # ------------------------------------------------------------
-    # CasADi solver
-    # ------------------------------------------------------------
+        wall_total = time.perf_counter() - wall_total_start
+        cpu_total = time.process_time() - cpu_total_start
+
+        self.last_metrics = {
+            "controller_wall_time_s": float(wall_total),
+            "controller_cpu_time_s": float(cpu_total),
+            "controller_frequency_hz": float(1.0 / wall_total) if wall_total > 0.0 else np.nan,
+            "controller_prepare_time_s": float(prepare_time),
+            "controller_solver_time_s": float(solver_time),
+            "controller_post_time_s": float(post_time),
+            "controller_success": int(success),
+        }
+
+        return action.astype(np.float32)
 
     def _build_casadi_solver(self):
         U_blocks = ca.MX.sym("U_blocks", self.control_blocks * self.nu)
 
-        # Parameter vector:
-        # x0: 12
-        # ref: N * 12
-        # current: N * 3
-        # previous input: 6
         n_params = self.nx + self.N * self.nx + self.N * self.nc + self.nu
         P = ca.MX.sym("P", n_params)
 
         idx = 0
-
         x = P[idx:idx + self.nx]
         idx += self.nx
 
@@ -172,34 +172,21 @@ class NMPCController(BaseController):
 
         for k in range(self.N):
             block_idx = k // self.block_size
-            u_k = U_blocks[
-                block_idx * self.nu:(block_idx + 1) * self.nu
-            ]
+            u_k = U_blocks[block_idx * self.nu:(block_idx + 1) * self.nu]
 
-            nu_c_k = currents[:, k]
-
-            x = self._casadi_dynamics_step(x, u_k, nu_c_k)
-
+            x = self._casadi_dynamics_step(x, u_k, currents[:, k])
             ref_k = refs[:, k]
             error = x - ref_k
 
             error = ca.vertcat(
-                error[0],
-                error[1],
-                error[2],
+                error[0], error[1], error[2],
                 self._casadi_wrap_angle(error[3]),
                 self._casadi_wrap_angle(error[4]),
                 self._casadi_wrap_angle(error[5]),
-                error[6],
-                error[7],
-                error[8],
-                error[9],
-                error[10],
-                error[11],
+                error[6], error[7], error[8], error[9], error[10], error[11],
             )
 
             du = u_k - prev_u
-
             Qk = Qf if k == self.N - 1 else Q
 
             cost += ca.mtimes([error.T, Qk, error])
@@ -209,11 +196,7 @@ class NMPCController(BaseController):
 
             prev_u = u_k
 
-        nlp = {
-            "x": U_blocks,
-            "f": cost,
-            "p": P,
-        }
+        nlp = {"x": U_blocks, "f": cost, "p": P}
 
         opts = {
             "ipopt.print_level": 0,
@@ -222,21 +205,14 @@ class NMPCController(BaseController):
             "ipopt.max_iter": 20,
             "ipopt.tol": 3e-3,
             "ipopt.acceptable_tol": 1e-2,
-            "ipopt.warm_start_init_point": "yes",
         }
 
         self.solver = ca.nlpsol("solver", "ipopt", nlp, opts)
 
-    # ------------------------------------------------------------
-    # Symbolic model
-    # ------------------------------------------------------------
-
     def _casadi_dynamics_step(self, x, thrust, nu_current):
         eta = x[0:6]
         nu = x[6:12]
-
-        phi = eta[3]
-        theta = eta[4]
+        phi, theta = eta[3], eta[4]
 
         tau = ca.mtimes(ca.DM(self.dyn.allocation_matrix), thrust)
 
@@ -244,15 +220,13 @@ class NMPCController(BaseController):
             nu[0] - nu_current[0],
             nu[1] - nu_current[1],
             nu[2] - nu_current[2],
-            nu[3],
-            nu[4],
-            nu[5],
+            nu[3], nu[4], nu[5],
         )
 
-        D_lin = ca.DM(self.dyn.D_lin)
-        D_quad = ca.DM(self.dyn.D_quad)
-
-        damping = D_lin * nu_rel + D_quad * nu_rel * ca.fabs(nu_rel)
+        damping = (
+            ca.DM(self.dyn.D_lin) * nu_rel
+            + ca.DM(self.dyn.D_quad) * nu_rel * ca.fabs(nu_rel)
+        )
 
         restoring = self._casadi_restoring_forces(phi, theta)
 
@@ -260,18 +234,14 @@ class NMPCController(BaseController):
         c_a = self._casadi_spatial_cross_force(nu_rel) @ (ca.DM(self.dyn.M_A) @ nu_rel)
 
         rhs = tau - c_rb - c_a - damping - restoring
-
         nu_dot = ca.solve(ca.DM(self.dyn.M), rhs)
 
         nu_next = nu + self.dt * nu_dot
-
         eta_dot = self._casadi_body_to_world_kinematics(eta, nu_next)
         eta_next = eta + self.dt * eta_dot
 
         eta_next = ca.vertcat(
-            eta_next[0],
-            eta_next[1],
-            eta_next[2],
+            eta_next[0], eta_next[1], eta_next[2],
             self._casadi_wrap_angle(eta_next[3]),
             self._casadi_wrap_angle(eta_next[4]),
             self._casadi_wrap_angle(eta_next[5]),
@@ -281,15 +251,13 @@ class NMPCController(BaseController):
 
     def _casadi_restoring_forces(self, phi, theta):
         weight_minus_buoyancy = self.dyn.W - self.dyn.B_force
-        coBM = self.dyn.coBM
-        W = self.dyn.W
 
         return ca.vertcat(
             weight_minus_buoyancy * ca.sin(theta),
             -weight_minus_buoyancy * ca.cos(theta) * ca.sin(phi),
             -weight_minus_buoyancy * ca.cos(theta) * ca.cos(phi),
-            coBM * W * ca.cos(theta) * ca.sin(phi),
-            coBM * W * ca.sin(theta),
+            self.dyn.coBM * self.dyn.W * ca.cos(theta) * ca.sin(phi),
+            self.dyn.coBM * self.dyn.W * ca.sin(theta),
             0.0,
         )
 
@@ -302,57 +270,29 @@ class NMPCController(BaseController):
         )
 
     def _casadi_spatial_cross_force(self, nu):
-        v = nu[0:3]
-        omega = nu[3:6]
-
-        S_v = self._casadi_skew(v)
-        S_w = self._casadi_skew(omega)
-
+        S_v = self._casadi_skew(nu[0:3])
+        S_w = self._casadi_skew(nu[3:6])
         Z = ca.DM.zeros(3, 3)
 
-        upper = ca.horzcat(S_w, S_v)
-        lower = ca.horzcat(Z, S_w)
-
-        return ca.vertcat(upper, lower)
+        return ca.vertcat(
+            ca.horzcat(S_w, S_v),
+            ca.horzcat(Z, S_w),
+        )
 
     def _casadi_body_to_world_kinematics(self, eta, nu):
-        phi = eta[3]
-        theta = eta[4]
-        psi = eta[5]
+        phi, theta, psi = eta[3], eta[4], eta[5]
 
-        c_psi = ca.cos(psi)
-        s_psi = ca.sin(psi)
-        c_th = ca.cos(theta)
-        s_th = ca.sin(theta)
-        c_phi = ca.cos(phi)
-        s_phi = ca.sin(phi)
+        c_psi, s_psi = ca.cos(psi), ca.sin(psi)
+        c_th, s_th = ca.cos(theta), ca.sin(theta)
+        c_phi, s_phi = ca.cos(phi), ca.sin(phi)
 
-        u = nu[0]
-        v = nu[1]
-        w = nu[2]
-        p = nu[3]
-        q = nu[4]
-        r = nu[5]
+        u, v, w = nu[0], nu[1], nu[2]
+        p, q, r = nu[3], nu[4], nu[5]
 
-        dx = (
-            u * c_psi * c_th
-            + v * (c_psi * s_th * s_phi - s_psi * c_phi)
-            + w * (c_psi * s_th * c_phi + s_psi * s_phi)
-        )
+        dx = u * c_psi * c_th + v * (c_psi * s_th * s_phi - s_psi * c_phi) + w * (c_psi * s_th * c_phi + s_psi * s_phi)
+        dy = u * s_psi * c_th + v * (s_psi * s_th * s_phi + c_psi * c_phi) + w * (s_psi * s_th * c_phi - c_psi * s_phi)
+        dz = -u * s_th + v * c_th * s_phi + w * c_th * c_phi
 
-        dy = (
-            u * s_psi * c_th
-            + v * (s_psi * s_th * s_phi + c_psi * c_phi)
-            + w * (s_psi * s_th * c_phi - c_psi * s_phi)
-        )
-
-        dz = (
-            -u * s_th
-            + v * c_th * s_phi
-            + w * c_th * c_phi
-        )
-
-        # Avoid division instability near pitch = +-90 deg.
         c_th_safe = c_th + 1e-6
 
         d_phi = p + (q * s_phi + r * c_phi) * ca.tan(theta)
@@ -362,11 +302,8 @@ class NMPCController(BaseController):
         return ca.vertcat(dx, dy, dz, d_phi, d_theta, d_psi)
 
     def _casadi_attitude_soft_penalty(self, x):
-        roll = x[3]
-        pitch = x[4]
-
-        roll_violation = ca.fmax(0.0, ca.fabs(roll) - self.roll_soft_limit)
-        pitch_violation = ca.fmax(0.0, ca.fabs(pitch) - self.pitch_soft_limit)
+        roll_violation = ca.fmax(0.0, ca.fabs(x[3]) - self.roll_soft_limit)
+        pitch_violation = ca.fmax(0.0, ca.fabs(x[4]) - self.pitch_soft_limit)
 
         return self.attitude_soft_weight * (
             roll_violation**2 + pitch_violation**2
@@ -376,27 +313,15 @@ class NMPCController(BaseController):
     def _casadi_wrap_angle(angle):
         return ca.atan2(ca.sin(angle), ca.cos(angle))
 
-    # ------------------------------------------------------------
-    # Numeric helpers
-    # ------------------------------------------------------------
-
     @staticmethod
     def _pack_state(state) -> np.ndarray:
         if isinstance(state, dict):
             return np.array(
                 [
-                    state["x"],
-                    state["y"],
-                    state["z"],
-                    state["roll"],
-                    state["pitch"],
-                    state["yaw"],
-                    state["u"],
-                    state["v"],
-                    state["w"],
-                    state["p"],
-                    state["q"],
-                    state["r"],
+                    state["x"], state["y"], state["z"],
+                    state["roll"], state["pitch"], state["yaw"],
+                    state["u"], state["v"], state["w"],
+                    state["p"], state["q"], state["r"],
                 ],
                 dtype=float,
             )
@@ -405,7 +330,6 @@ class NMPCController(BaseController):
 
     def _forecast_current_sequence(self) -> np.ndarray:
         dyn_copy = copy.deepcopy(self.dyn)
-
         forecast = np.zeros((self.N, 3), dtype=float)
 
         for k in range(self.N):
@@ -417,8 +341,10 @@ class NMPCController(BaseController):
         refs = np.zeros((self.N, 12), dtype=float)
 
         for k in range(self.N):
-            ref = self.trajectory.get_reference(t_start + (k + 1) * self.dt)
-            refs[k] = np.asarray(ref, dtype=float).reshape(12)
+            refs[k] = np.asarray(
+                self.trajectory.get_reference(t_start + (k + 1) * self.dt),
+                dtype=float,
+            ).reshape(12)
 
         return refs
 

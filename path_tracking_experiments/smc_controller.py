@@ -1,4 +1,4 @@
-"""PID controller for BlueROV2 path tracking."""
+"""Sliding Mode Controller for BlueROV2 path tracking."""
 
 from __future__ import annotations
 
@@ -9,30 +9,42 @@ from base_controller import BaseController
 from env_utils import wrap_angle
 
 
-class PIDController(BaseController):
-    name = "pid"
+LAMBDA = [1.5, 1.5, 2.0, 1.0, 1.0, 1.0]
+EPS = [0.2, 0.2, 0.1, 0.1, 0.1, 0.1]
+K_INIT = [10.0, 10.0, 20.0, 5.0, 5.0, 5.0]
+K_BAR = [5.0, 5.0, 10.0, 2.0, 2.0, 2.0]
+MU = [0.05, 0.05, 0.05, 0.02, 0.02, 0.02]
+ALPHA = [1.0, 1.0, 1.0, 0.1, 0.1, 0.1]
+
+
+class SMCController(BaseController):
+    name = "smc"
 
     def __init__(self, dynamics=None, dt: float = 0.1):
         self.dt = float(dt)
         self.dynamics = dynamics
 
-        self.integral = np.zeros(6, dtype=float)
-        self.prev_thrust = np.zeros(6, dtype=float)
+        if self.dynamics is None:
+            raise RuntimeError("SMCController requires env.unwrapped.dynamics.")
 
-        self.kp = np.array([4.10, 5.70, 7.60, 1.70, 2.45, 1.75], dtype=float)
-        self.ki = np.array([0.12, 0.17, 0.23, 0.0, 0.0, 0.05], dtype=float)
-        self.kd = np.array([2.80, 1.85, 3.20, 0.55, 1.05, 0.45], dtype=float)
+        self.lam = np.array(LAMBDA, dtype=float)
+        self.eps = np.array(EPS, dtype=float)
+        self.alpha = np.array(ALPHA, dtype=float)
+        self.kbar = np.array(K_BAR, dtype=float)
+        self.mu = np.array(MU, dtype=float)
+        self.K = np.array(K_INIT, dtype=float)
 
-        self.integral_limit = np.array([1.0, 1.0, 0.8, 0.3, 0.3, 0.5], dtype=float)
-
+        self.wrench_sat = 20.0
         self.thrust_limit = 40.0
         self.max_delta_thrust = 8.0
 
-        self._pinv = None
+        self.prev_thrust = np.zeros(6, dtype=float)
+        self.allocation_pinv = np.linalg.pinv(self.dynamics.allocation_matrix)
+
         self.last_metrics = self._empty_metrics()
 
     def reset(self):
-        self.integral[:] = 0.0
+        self.K = np.array(K_INIT, dtype=float)
         self.prev_thrust[:] = 0.0
         self.last_metrics = self._empty_metrics()
 
@@ -48,28 +60,39 @@ class PIDController(BaseController):
             "controller_success": 1,
         }
 
-    def _allocation_pinv(self):
-        if self.dynamics is None:
-            raise RuntimeError("PIDController requires env.unwrapped.dynamics.")
-
-        if self._pinv is None:
-            self._pinv = np.linalg.pinv(self.dynamics.allocation_matrix)
-
-        return self._pinv
-
     @staticmethod
-    def _rotation_world_to_body(yaw: float) -> np.ndarray:
+    def _world_to_body_xyz(vec_world, yaw):
         c = np.cos(yaw)
         s = np.sin(yaw)
 
         return np.array(
             [
-                [c, s, 0.0],
-                [-s, c, 0.0],
-                [0.0, 0.0, 1.0],
+                vec_world[0] * c + vec_world[1] * s,
+                -vec_world[0] * s + vec_world[1] * c,
+                vec_world[2],
             ],
             dtype=float,
         )
+
+    def _smc_wrench(self, error_body, velocity_error_body):
+        s_surface = velocity_error_body + self.lam * error_body
+
+        wrench = np.zeros(6, dtype=float)
+
+        for i in range(6):
+            adaptation_rate = self.kbar[i] * np.sign(
+                np.abs(s_surface[i]) - self.mu[i]
+            )
+
+            self.K[i] += self.dt * adaptation_rate
+            self.K[i] = np.clip(self.K[i], self.alpha[i], 60.0)
+
+            if abs(s_surface[i]) > self.eps[i]:
+                wrench[i] = self.K[i] * np.sign(s_surface[i])
+            else:
+                wrench[i] = self.K[i] * (s_surface[i] / self.eps[i])
+
+        return np.clip(wrench, -self.wrench_sat, self.wrench_sat)
 
     def get_action(self, obs, state, reference, t):
         wall_total_start = time.perf_counter()
@@ -87,44 +110,39 @@ class PIDController(BaseController):
         nu_ref = reference[6:12]
 
         yaw = eta[5]
-        R_wb = self._rotation_world_to_body(yaw)
 
         prepare_time = time.perf_counter() - prepare_start
 
         solver_start = time.perf_counter()
 
         pos_error_world = eta_ref[0:3] - eta[0:3]
-        pos_error_body = R_wb @ pos_error_world
+        pos_error_body = self._world_to_body_xyz(pos_error_world, yaw)
 
         att_error = eta_ref[3:6] - eta[3:6]
         att_error[0] = wrap_angle(att_error[0])
         att_error[1] = wrap_angle(att_error[1])
         att_error[2] = wrap_angle(att_error[2])
 
-        error = np.concatenate((pos_error_body, att_error))
+        error_body = np.concatenate((pos_error_body, att_error))
 
-        vel_error_world = nu_ref[0:3] - nu[0:3]
-        vel_error_body = R_wb @ vel_error_world
+        lin_vel_error_world = nu_ref[0:3] - nu[0:3]
+        lin_vel_error_body = self._world_to_body_xyz(lin_vel_error_world, yaw)
 
         ang_vel_error = nu_ref[3:6] - nu[3:6]
-        vel_error = np.concatenate((vel_error_body, ang_vel_error))
+        velocity_error_body = np.concatenate((lin_vel_error_body, ang_vel_error))
 
-        self.integral += error * self.dt
-        self.integral = np.clip(
-            self.integral,
-            -self.integral_limit,
-            self.integral_limit,
-        )
-
-        tau = self.kp * error + self.ki * self.integral + self.kd * vel_error
-
-        thrust_cmd = self._allocation_pinv() @ tau
+        wrench = self._smc_wrench(error_body, velocity_error_body)
+        thrust_cmd = self.allocation_pinv @ wrench
 
         solver_time = time.perf_counter() - solver_start
 
         post_start = time.perf_counter()
 
-        thrust_cmd = np.clip(thrust_cmd, -self.thrust_limit, self.thrust_limit)
+        thrust_cmd = np.clip(
+            thrust_cmd,
+            -self.thrust_limit,
+            self.thrust_limit,
+        )
 
         delta = np.clip(
             thrust_cmd - self.prev_thrust,
@@ -133,7 +151,11 @@ class PIDController(BaseController):
         )
 
         thrust = self.prev_thrust + delta
-        thrust = np.clip(thrust, -self.thrust_limit, self.thrust_limit)
+        thrust = np.clip(
+            thrust,
+            -self.thrust_limit,
+            self.thrust_limit,
+        )
 
         self.prev_thrust = thrust.copy()
 
