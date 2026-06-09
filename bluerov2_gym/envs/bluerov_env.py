@@ -12,18 +12,19 @@ from bluerov2_gym.envs.core.visualization.renderer import BlueRovRenderer
 class BlueRov(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, jonswap_params: dict | None = None):
         super().__init__()
 
         self.render_mode = render_mode
         self.dt = 0.1
+        self.jonswap_params = jonswap_params.copy() if jonswap_params is not None else None
 
         with resources.path("bluerov2_gym.assets", "BlueRov2.dae") as asset_path:
             self.model_path = str(asset_path)
 
         self.renderer = BlueRovRenderer(render_mode=render_mode)
         self.reward_fn = Reward()
-        self.dynamics = Dynamics()
+        self.dynamics = Dynamics(jonswap_params=self.jonswap_params)
 
         self.state_keys = [
             "x", "y", "z",
@@ -34,7 +35,6 @@ class BlueRov(gym.Env):
 
         self.state = {key: 0.0 for key in self.state_keys}
 
-        # Direct thruster commands: [T1, T2, T3, T4, T5, T6]
         self.action_space = spaces.Box(
             low=-40.0,
             high=40.0,
@@ -66,11 +66,26 @@ class BlueRov(gym.Env):
         for key in self.state_keys:
             self.state[key] = 0.0
 
-        self.dynamics.reset()
+        reset_jonswap_params = None
+
+        if options is not None:
+            reset_jonswap_params = options.get("jonswap_params", None)
+
+        if reset_jonswap_params is not None:
+            self.jonswap_params = reset_jonswap_params.copy()
+            self.dynamics.reset(jonswap_params=self.jonswap_params)
+        else:
+            self.dynamics.reset()
+
         self.reward_fn.reset()
 
         obs = self._get_obs()
-        info = {}
+
+        info = {
+            "jonswap_params": self.dynamics.get_jonswap_params()
+            if hasattr(self.dynamics, "get_jonswap_params")
+            else self.jonswap_params
+        }
 
         return obs, info
 
@@ -81,7 +96,6 @@ class BlueRov(gym.Env):
         self.dynamics.step(self.state, action)
 
         obs = self._get_obs()
-
         reward = self.reward_fn.get_reward(obs, action)
 
         terminated = False
@@ -111,6 +125,9 @@ class BlueRov(gym.Env):
 
         if "thrusters" in self.state:
             info["thrusters"] = self.state["thrusters"]
+
+        if "nu_current" in self.state:
+            info["nu_current"] = self.state["nu_current"]
 
         if self.render_mode == "human":
             self.step_sim()

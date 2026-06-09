@@ -13,6 +13,8 @@ from pid_controller import PIDController
 from nmpc_controller import NMPCController
 from ppo_controller import PPOController
 
+from load_jonswap_config import load_jonswap_config
+
 
 OUTPUT_DIR = Path("results/trajectory_experiments")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,14 +39,17 @@ class BaseTrajectory:
 
         v_world = (p_next - p_prev) / (2.0 * dt)
 
-        yaw = np.arctan2(v_world[1], v_world[0]) if np.linalg.norm(v_world[:2]) > 1e-6 else 0.0
+        yaw = (
+            np.arctan2(v_world[1], v_world[0])
+            if np.linalg.norm(v_world[:2]) > 1e-6
+            else 0.0
+        )
 
         ref = np.zeros(12, dtype=float)
         ref[0:3] = p
         ref[3] = 0.0
         ref[4] = 0.0
         ref[5] = wrap_angle(yaw)
-
         ref[6:9] = v_world
         ref[9:12] = 0.0
 
@@ -78,6 +83,7 @@ class FigureEightDepthTrajectory(BaseTrajectory):
 
     def position(self, t):
         s = self.omega * t
+
         return np.array([
             self.a * np.sin(s),
             self.a * np.sin(s) * np.cos(s),
@@ -92,7 +98,9 @@ class SquareTrajectory(BaseTrajectory):
         self.side = side
         self.depth = depth
         self.period = period
+
         h = side / 2.0
+
         self.points = np.array([
             [-h, -h, depth],
             [ h, -h, depth],
@@ -105,23 +113,35 @@ class SquareTrajectory(BaseTrajectory):
         phase = (t % self.period) / self.period
         segment = min(int(phase * 4), 3)
         local = phase * 4 - segment
-        return (1.0 - local) * self.points[segment] + local * self.points[segment + 1]
+
+        return (
+            (1.0 - local) * self.points[segment]
+            + local * self.points[segment + 1]
+        )
 
 
 class StarTrajectory(BaseTrajectory):
     name = "star"
 
-    def __init__(self, radius_outer=1.2, radius_inner=0.45, depth=-0.6, period=100.0):
+    def __init__(
+        self,
+        radius_outer=1.2,
+        radius_inner=0.45,
+        depth=-0.6,
+        period=100.0,
+    ):
         self.depth = depth
         self.period = period
 
         points = []
+
         for i in range(10):
             r = radius_outer if i % 2 == 0 else radius_inner
             angle = np.pi / 2.0 + i * np.pi / 5.0
             points.append([r * np.cos(angle), r * np.sin(angle), depth])
 
         points.append(points[0])
+
         self.points = np.array(points, dtype=float)
 
     def position(self, t):
@@ -129,7 +149,11 @@ class StarTrajectory(BaseTrajectory):
         n_seg = len(self.points) - 1
         segment = min(int(phase * n_seg), n_seg - 1)
         local = phase * n_seg - segment
-        return (1.0 - local) * self.points[segment] + local * self.points[segment + 1]
+
+        return (
+            (1.0 - local) * self.points[segment]
+            + local * self.points[segment + 1]
+        )
 
 
 class LetterBTrajectory(BaseTrajectory):
@@ -141,11 +165,7 @@ class LetterBTrajectory(BaseTrajectory):
 
         points = []
 
-        # ==========================
-        # Haste vertical
-        # ==========================
         x_stem = -0.6 * scale
-
         y_bottom = -1.0 * scale
         y_mid = 0.0
         y_top = 1.0 * scale
@@ -153,63 +173,47 @@ class LetterBTrajectory(BaseTrajectory):
         for y in np.linspace(y_bottom, y_top, 40):
             points.append([x_stem, y, depth])
 
-        # ==========================
-        # Lóbulo superior
-        # ==========================
         cx = -0.05 * scale
         cy = 0.5 * scale
-
         rx = 0.65 * scale
         ry = 0.5 * scale
 
-        theta = np.linspace(np.pi/2, -np.pi/2, 60)
+        theta = np.linspace(np.pi / 2.0, -np.pi / 2.0, 60)
 
         for th in theta:
             x = cx + rx * np.cos(th)
             y = cy + ry * np.sin(th)
             points.append([x, y, depth])
 
-        # volta para a cintura
         points.append([x_stem, y_mid, depth])
 
-        # ==========================
-        # Lóbulo inferior
-        # (ligeiramente maior)
-        # ==========================
         cx = -0.02 * scale
         cy = -0.5 * scale
-
         rx = 0.72 * scale
         ry = 0.55 * scale
 
-        theta = np.linspace(np.pi/2, -np.pi/2, 70)
+        theta = np.linspace(np.pi / 2.0, -np.pi / 2.0, 70)
 
         for th in theta:
             x = cx + rx * np.cos(th)
             y = cy + ry * np.sin(th)
             points.append([x, y, depth])
 
-        # fecha na base da haste
         points.append([x_stem, y_bottom, depth])
 
         self.points = np.array(points, dtype=float)
 
     def position(self, t):
         phase = (t % self.period) / self.period
-
         n_seg = len(self.points) - 1
-
-        segment = min(
-            int(phase * n_seg),
-            n_seg - 1,
-        )
-
+        segment = min(int(phase * n_seg), n_seg - 1)
         local = phase * n_seg - segment
 
         return (
             (1.0 - local) * self.points[segment]
             + local * self.points[segment + 1]
         )
+
 
 def make_controller(controller_name: str, dynamics, trajectory):
     name = controller_name.lower()
@@ -221,7 +225,11 @@ def make_controller(controller_name: str, dynamics, trajectory):
         return PIDController(dynamics=dynamics, dt=DT)
 
     if name == "nmpc":
-        return NMPCController(trajectory=trajectory, dynamics=dynamics, dt=DT)
+        return NMPCController(
+            trajectory=trajectory,
+            dynamics=dynamics,
+            dt=DT,
+        )
 
     if name == "ppo":
         return PPOController()
@@ -229,13 +237,34 @@ def make_controller(controller_name: str, dynamics, trajectory):
     raise ValueError(f"Unknown controller: {controller_name}")
 
 
-def run_single_trajectory(controller_name: str, trajectory):
-    env = make_env(render_mode=None)
-    dynamics = env.unwrapped.dynamics
+def reset_env_with_jonswap(env, jonswap_params):
+    if jonswap_params is None:
+        obs, _ = env.reset()
+        return obs
 
+    try:
+        obs, _ = env.reset(
+            options={
+                "jonswap_params": jonswap_params,
+            }
+        )
+    except TypeError:
+        obs, _ = env.reset()
+        env.unwrapped.dynamics.reset(jonswap_params=jonswap_params)
+
+    return obs
+
+
+def run_single_trajectory(controller_name: str, trajectory, jonswap_params):
+    env = make_env(render_mode=None)
+
+    if jonswap_params is not None:
+        env.unwrapped.dynamics.reset(jonswap_params=jonswap_params)
+
+    dynamics = env.unwrapped.dynamics
     controller = make_controller(controller_name, dynamics, trajectory)
 
-    obs, _ = env.reset()
+    obs = reset_env_with_jonswap(env, jonswap_params)
 
     if hasattr(controller, "reset"):
         controller.reset()
@@ -244,7 +273,10 @@ def run_single_trajectory(controller_name: str, trajectory):
 
     rows = []
 
-    print(f"\n[INFO] Running {controller.name.upper()} on trajectory: {trajectory.name}")
+    print(
+        f"\n[INFO] Running {controller.name.upper()} "
+        f"on trajectory: {trajectory.name}"
+    )
 
     for k in range(STEPS):
         t = k * DT
@@ -294,8 +326,11 @@ def run_single_trajectory(controller_name: str, trajectory):
 
         if k % 50 == 0:
             print(
-                f"[{trajectory.name}] step={k:04d}/{STEPS} | "
-                f"t={t:5.1f}s | error={errors['tracking_error_m']:.3f} m | "
+                f"[{trajectory.name}] "
+                f"controller={controller.name.upper()} | "
+                f"step={k:04d}/{STEPS} | "
+                f"t={t:5.1f}s | "
+                f"error={errors['tracking_error_m']:.3f} m | "
                 f"reward={reward:.3f}"
             )
 
@@ -340,6 +375,9 @@ def run_single_trajectory(controller_name: str, trajectory):
 
 
 def main():
+    jonswap_params = load_jonswap_config()
+    print(jonswap_params)
+
     trajectories = [
         SquareTrajectory(),
         FigureEightDepthTrajectory(),
@@ -353,6 +391,7 @@ def main():
             run_single_trajectory(
                 controller_name=controller_name,
                 trajectory=trajectory,
+                jonswap_params=jonswap_params,
             )
 
     print("\n[OK] All controller-trajectory experiments finished.")

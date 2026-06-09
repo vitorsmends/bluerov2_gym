@@ -142,7 +142,7 @@ def plot_xy_for_trajectory(traj_key, ctrl_data):
 
     plt.xlabel("X [m]")
     plt.ylabel("Y [m]")
-    plt.title(TRAJECTORIES[traj_key])
+    # plt.title(TRAJECTORIES[traj_key])
     plt.axis("equal")
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(frameon=True)
@@ -180,7 +180,7 @@ def plot_3d_for_trajectory(traj_key, ctrl_data):
     ax.set_xlabel("X [m]")
     ax.set_ylabel("Y [m]")
     ax.set_zlabel("Z [m]")
-    ax.set_title(TRAJECTORIES[traj_key])
+    # ax.set_title(TRAJECTORIES[traj_key])
     ax.invert_zaxis()
     ax.legend(frameon=True)
     plt.tight_layout()
@@ -208,7 +208,7 @@ def plot_error_for_trajectory(traj_key, ctrl_data):
 
     plt.xlabel("Time [s]")
     plt.ylabel("Euclidean Tracking Error [m]")
-    plt.title(TRAJECTORIES[traj_key])
+    # plt.title(TRAJECTORIES[traj_key])
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(frameon=True)
     plt.tight_layout()
@@ -245,7 +245,7 @@ def plot_depth_for_trajectory(traj_key, ctrl_data):
 
     plt.xlabel("Time [s]")
     plt.ylabel("Z [m]")
-    plt.title(f"Depth Response - {TRAJECTORIES[traj_key]}")
+    # plt.title(f"Depth Response - {TRAJECTORIES[traj_key]}")
     plt.gca().invert_yaxis()
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(frameon=True)
@@ -274,7 +274,7 @@ def plot_control_effort_for_trajectory(traj_key, ctrl_data):
 
     plt.xlabel("Time [s]")
     plt.ylabel(r"Control Effort $\sum_i T_i^2$ [N$^2$]")
-    plt.title(TRAJECTORIES[traj_key])
+    # plt.title(TRAJECTORIES[traj_key])
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(frameon=True)
     plt.tight_layout()
@@ -311,7 +311,7 @@ def plot_yaw_for_trajectory(traj_key, ctrl_data):
 
     plt.xlabel("Time [s]")
     plt.ylabel("Yaw [rad]")
-    plt.title(f"Yaw Response - {TRAJECTORIES[traj_key]}")
+    # plt.title(f"Yaw Response - {TRAJECTORIES[traj_key]}")
     plt.grid(True, linestyle="--", alpha=0.5)
     plt.legend(frameon=True)
     plt.tight_layout()
@@ -364,10 +364,10 @@ def main():
     for traj_key, ctrl_data in data.items():
         plot_xy_for_trajectory(traj_key, ctrl_data)
         plot_3d_for_trajectory(traj_key, ctrl_data)
-        plot_error_for_trajectory(traj_key, ctrl_data)
-        plot_depth_for_trajectory(traj_key, ctrl_data)
-        plot_yaw_for_trajectory(traj_key, ctrl_data)
-        plot_control_effort_for_trajectory(traj_key, ctrl_data)
+        # plot_error_for_trajectory(traj_key, ctrl_data)
+        # plot_depth_for_trajectory(traj_key, ctrl_data)
+        # plot_yaw_for_trajectory(traj_key, ctrl_data)
+        # plot_control_effort_for_trajectory(traj_key, ctrl_data)
 
     print("[OK] All individual trajectory plots generated.")
 

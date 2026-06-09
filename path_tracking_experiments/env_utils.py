@@ -29,10 +29,12 @@ except gym.error.Error:
     pass
 
 
-def make_env(render_mode=None):
-    """Create a BlueROV2 Gym environment."""
-    return gym.make(ENV_ID, render_mode=render_mode)
-
+def make_env(render_mode=None, jonswap_params=None):
+    return gym.make(
+        ENV_ID,
+        render_mode=render_mode,
+        jonswap_params=jonswap_params,
+    )
 
 def scalar(value) -> float:
     """Convert scalar-like numpy values to a Python float."""

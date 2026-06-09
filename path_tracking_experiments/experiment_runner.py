@@ -36,6 +36,18 @@ def _get_controller_metrics(controller):
     ]
 
 
+def _build_repetition_jonswap_params(jonswap_params, rep_seed):
+    if jonswap_params is None:
+        return None
+
+    params = jonswap_params.copy()
+
+    if rep_seed is not None:
+        params["seed"] = rep_seed
+
+    return params
+
+
 def run_path_tracking_experiment(
     controller,
     trajectory,
@@ -44,6 +56,7 @@ def run_path_tracking_experiment(
     dt: float = 0.1,
     repetitions: int = 1,
     seed: int | None = 42,
+    jonswap_params: dict | None = None,
     render_mode=None,
 ):
     """Run repeated path-tracking experiments and save a CSV log.
@@ -64,11 +77,29 @@ def run_path_tracking_experiment(
 
     for rep in range(repetitions):
         rep_seed = None if seed is None else int(seed + rep)
+        rep_jonswap_params = _build_repetition_jonswap_params(
+            jonswap_params,
+            rep_seed,
+        )
+
+        reset_options = None
+        if rep_jonswap_params is not None:
+            reset_options = {
+                "jonswap_params": rep_jonswap_params,
+            }
 
         try:
-            obs, _ = env.reset(seed=rep_seed)
+            obs, _ = env.reset(
+                seed=rep_seed,
+                options=reset_options,
+            )
         except TypeError:
             obs, _ = env.reset()
+
+            if rep_jonswap_params is not None:
+                env.unwrapped.dynamics.reset(
+                    jonswap_params=rep_jonswap_params,
+                )
 
         if hasattr(controller, "reset"):
             controller.reset()
