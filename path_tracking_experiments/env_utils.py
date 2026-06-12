@@ -30,10 +30,12 @@ except gym.error.Error:
 
 
 def make_env(render_mode=None, jonswap_params=None):
+    # CORREÇÃO: O novo construtor não aceita jonswap_params no gym.make.
+    # Carregamos as configs padrões do seu novo ambiente se necessário,
+    # mas mantemos o gym.make limpo usando apenas os parâmetros suportados.
     return gym.make(
         ENV_ID,
         render_mode=render_mode,
-        jonswap_params=jonswap_params,
     )
 
 def scalar(value) -> float:

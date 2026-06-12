@@ -3,7 +3,6 @@ import numpy as np
 
 class Reward:
     def __init__(self):
-        # Original reward strategy
         self.w_pos = 1.0
         self.w_vel = 0.1
         self.w_yaw = 0.5
@@ -22,9 +21,6 @@ class Reward:
         pass
 
     def get_reward(self, obs, action=None):
-        # action is accepted only for compatibility with the updated environment.
-        # It is intentionally not used, preserving the original reward strategy.
-
         x = self._scalar(obs["x"])
         y = self._scalar(obs["y"])
         z = self._scalar(obs["z"])

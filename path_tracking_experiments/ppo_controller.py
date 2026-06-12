@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import time
+import yaml
 from pathlib import Path
 
 import gymnasium as gym
@@ -21,11 +23,26 @@ class PPOController(BaseController):
         self,
         model_path: str = "ppo_trajectory_final",
         vecnormalize_path: str = "vec_normalize.pkl",
+        env_config_path: str = "config/blue_rov_config.yaml",
+        dynamics_config_path: str = "config/dynamics_config.yaml",
     ):
         self.model_path = self._resolve_file(model_path)
         self.vecnormalize_path = self._resolve_file(vecnormalize_path)
 
-        vec_env = DummyVecEnv([lambda: gym.make(ENV_ID, render_mode=None)])
+        # Carrega as configurações estruturadas em arquivos YAML para injetar no novo ambiente
+        env_cfg = self._load_yaml_config(env_config_path)
+        dyn_cfg = self._load_yaml_config(dynamics_config_path)
+
+        # Instanciação adequada do DummyVecEnv repassando os argumentos esperados pelo novo construtor
+        vec_env = DummyVecEnv([
+            lambda: gym.make(
+                ENV_ID, 
+                render_mode=None, 
+                env_config=env_cfg, 
+                dynamics_config=dyn_cfg
+            )
+        ])
+        
         self.vec_env = VecNormalize.load(str(self.vecnormalize_path), vec_env)
         self.vec_env.training = False
         self.vec_env.norm_reward = False
@@ -48,6 +65,13 @@ class PPOController(BaseController):
             "controller_post_time_s": 0.0,
             "controller_success": 1,
         }
+
+    @staticmethod
+    def _load_yaml_config(path: str) -> dict:
+        if os.path.exists(path):
+            with open(path, "r") as f:
+                return yaml.safe_load(f) or {}
+        return {}
 
     @staticmethod
     def _resolve_file(path: str) -> Path:

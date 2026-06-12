@@ -1,0 +1,16 @@
+env:
+  dt: 0.1
+  max_episode_steps: 1000
+
+jonswap:
+  Hs: 2.0
+  Tp: 12.0
+  gamma: 3.3
+  N: 64
+  wave_dir: [0.5, 0.5]
+  scale: 0.5
+  max_current: 0.7
+  alpha_wave: 0.02
+  noise_std: 0.01
+  alpha_noise: 0.3
+  seed: 42

@@ -1,0 +1,63 @@
+curriculum:
+  enabled: true
+  min_episodes_criterion: 15
+  levels:
+    - name: "Calm Sea (Head Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 1.25
+        Tp: 7.03
+        gamma: 1.5
+        N: 64
+        wave_dir: [1.0, 0.0]
+        scale: 0.25
+        max_current: 0.14
+        alpha_wave: 0.02
+        noise_std: 0.005
+        alpha_noise: 0.30
+        seed: 42
+
+    - name: "Moderate Sea (Quartering Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 2.50
+        Tp: 8.0
+        gamma: 3.3
+        N: 64
+        wave_dir: [0.707, 0.707]
+        scale: 0.50
+        max_current: 0.50
+        alpha_wave: 0.02
+        noise_std: 0.010
+        alpha_noise: 0.30
+        seed: 42
+
+    - name: "Severe Sea (Beam Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 4.50
+        Tp: 8.0
+        gamma: 3.3
+        N: 64
+        wave_dir: [0.0, 1.0]
+        scale: 0.80
+        max_current: 0.80
+        alpha_wave: 0.02
+        noise_std: 0.020
+        alpha_noise: 0.30
+        seed: 42
+
+    - name: "Extreme Sea (Following/Following-Quartering Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 4.50
+        Tp: 8.0
+        gamma: 5.0
+        N: 128
+        wave_dir: [-1.0, 0.0]
+        scale: 1.20
+        max_current: 1.50
+        alpha_wave: 0.02
+        noise_std: 0.030
+        alpha_noise: 0.30
+        seed: 42

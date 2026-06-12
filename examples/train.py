@@ -9,14 +9,12 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.callbacks import CheckpointCallback
 
-
 ENV_ID = "BlueRov-v0"
 
 LOG_DIR = "./bluerov_tensorboard/"
 MODEL_DIR = "./models/"
-MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo")
-VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize.pkl")
-
+MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo_curriculum")
+VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize_curriculum.pkl")
 
 try:
     register(
@@ -37,10 +35,11 @@ def make_env(render_mode=None):
     return _init
 
 
-def train_model():
+def train_model_with_curriculum():
     os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(MODEL_DIR, exist_ok=True)
 
+    # Inicialização do ambiente idêntica ao seu script antigo
     env = DummyVecEnv([
         make_env(render_mode=None)
     ])
@@ -57,10 +56,11 @@ def train_model():
     checkpoint_callback = CheckpointCallback(
         save_freq=100_000,
         save_path=MODEL_DIR,
-        name_prefix="bluerov_ppo_checkpoint",
+        name_prefix="bluerov_ppo_curriculum_checkpoint",
         save_vecnormalize=True,
     )
 
+    # Instanciação do PPO mantendo rigorosamente seus hiperparâmetros originais
     model = PPO(
         policy="MultiInputPolicy",
         env=env,
@@ -84,13 +84,50 @@ def train_model():
         ),
     )
 
-    print("Iniciando treinamento...")
-    model.learn(
-        total_timesteps=1_000_000,
-        callback=checkpoint_callback,
-        tb_log_name="PPO_BlueROV2_Thrusters",
-    )
-    print("Treinamento finalizado.")
+    # Define a progressão do Curriculum Learning baseada na severidade do JONSWAP
+    lessons = [
+        {"timesteps": 200_000, "Hs": 0.0, "max_current": 0.0, "scale": 0.0, "wave_dir": [1.0, 0.0]},
+        {"timesteps": 300_000, "Hs": 0.5, "max_current": 0.2, "scale": 0.2, "wave_dir": [1.0, 0.0]},
+        {"timesteps": 300_000, "Hs": 1.2, "max_current": 0.4, "scale": 0.4, "wave_dir": [1.0, 0.0]},
+        {"timesteps": 200_000, "Hs": 2.0, "max_current": 0.7, "scale": 0.5, "wave_dir": [1.0, 0.0]},
+    ]
+
+    print("Iniciando treinamento estruturado por currículo...")
+    
+    is_first_iteration = True
+    for index, lesson in enumerate(lessons):
+        print(f"\n[CURRICULUM] Transição de Fase | Iniciando Etapa {index + 1} de {len(lessons)}")
+        print(f"[CURRICULUM] Parâmetros de distúrbio -> Hs: {lesson['Hs']}m | Corrente Máxima: {lesson['max_current']}m/s")
+
+        # Garante a atualização dos parâmetros injetando o dicionário na propriedade correspondente do simulador
+        base_env = env.envs[0].unwrapped
+        base_env.jonswap_params = {
+            "Hs": lesson["Hs"],
+            "Tp": 12.0,
+            "gamma": 3.3,
+            "N": 64,
+            "wave_dir": tuple(lesson["wave_dir"]),
+            "scale": lesson["scale"],
+            "max_current": lesson["max_current"],
+            "seed": 42
+        }
+        
+        # Sincroniza a atualização forçando o reset da instância de dinâmica associada
+        if hasattr(base_env.dynamics, "set_jonswap_params"):
+            base_env.dynamics.set_jonswap_params(**base_env.jonswap_params)
+        else:
+            base_env.dynamics.reset(jonswap_params=base_env.jonswap_params)
+
+        # Executa o aprendizado cumulativo sem zerar as contagens globais das métricas do otimizador
+        model.learn(
+            total_timesteps=lesson["timesteps"],
+            callback=checkpoint_callback,
+            tb_log_name="PPO_BlueROV2_Curriculum",
+            reset_num_timesteps=is_first_iteration
+        )
+        is_first_iteration = False
+
+    print("Treinamento por currículo finalizado com sucesso.")
 
     model.save(MODEL_PATH)
     env.save(VECNORM_PATH)
@@ -100,43 +137,5 @@ def train_model():
     print(f"VecNormalize salvo em: {VECNORM_PATH}")
 
 
-def evaluate_model(render_mode="human", episodes=5):
-    print("Iniciando avaliação...")
-
-    env = DummyVecEnv([
-        make_env(render_mode=render_mode)
-    ])
-
-    env = VecNormalize.load(VECNORM_PATH, env)
-    env.training = False
-    env.norm_reward = False
-
-    model = PPO.load(MODEL_PATH, env=env)
-
-    for ep in range(episodes):
-        obs = env.reset()
-        done = False
-        total_reward = 0.0
-        step_count = 0
-
-        while not done:
-            action, _ = model.predict(obs, deterministic=True)
-
-            obs, reward, dones, infos = env.step(action)
-
-            total_reward += float(reward[0])
-            done = bool(dones[0])
-            step_count += 1
-
-            # Para debug dos comandos de thruster:
-            if step_count % 100 == 0:
-                print(f"Ep {ep + 1} | Step {step_count} | Action: {action[0]}")
-
-        print(f"Episode {ep + 1} | reward: {total_reward:.2f} | steps: {step_count}")
-
-    env.close()
-
-
 if __name__ == "__main__":
-    train_model()
-    evaluate_model(render_mode="human", episodes=5)
+    train_model_with_curriculum()
