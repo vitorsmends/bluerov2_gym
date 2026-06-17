@@ -9,12 +9,12 @@ from pathlib import Path
 
 
 CONTROLLERS = [
-    ("PID", "run_pid.py"),
-    ("PPO", "run_ppo.py"),
+    # ("PID", "run_pid.py"),
+    # ("PPO", "run_ppo.py"),
     # ("MPC", "run_mpc.py"),
     ("NMPC", "run_nmpc.py"),
-    ("LQR", "run_lqr.py"),
-    ("SMC", "run_smc.py"),
+    # ("LQR", "run_lqr.py"),
+    # ("SMC", "run_smc.py"),
 ]
 
 

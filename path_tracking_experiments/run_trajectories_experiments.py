@@ -15,15 +15,20 @@ from ppo_controller import PPOController
 
 from load_jonswap_config import load_jonswap_config
 
+import yaml
 
-OUTPUT_DIR = Path("results/trajectory_experiments")
+with open("path_tracking_experiments/jonswap_config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+    config_default = config.get("default_scenario")
+
+OUTPUT_DIR = Path("results-" + config_default + "/trajectory_experiments")
+print(OUTPUT_DIR)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DT = 0.1
 STEPS = 1000
 CONTROLLERS = ["pid", "smc", "nmpc", "ppo"]
-
-
+    
 class BaseTrajectory:
     name = "base"
 

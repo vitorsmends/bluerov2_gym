@@ -3,10 +3,15 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import yaml
 
-INPUT_DIR = "results/path_tracking"
-OUTPUT_DIR = "results/plots_performance_cost_tradeoff"
-TABLE_DIR = "results/tables_performance_cost_tradeoff"
+with open("path_tracking_experiments/jonswap_config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+    config_default = config.get("default_scenario")
+
+INPUT_DIR = f"results-{config_default}/path_tracking"
+OUTPUT_DIR = f"results-{config_default}/plots_computational_cost"
+TABLE_DIR = f"results-{config_default}/tables_computational_cost"
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 os.makedirs(TABLE_DIR, exist_ok=True)

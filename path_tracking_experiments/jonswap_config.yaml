@@ -1,22 +1,32 @@
-# References:
-# [1] Y. Deng, X. Ren, M. Nuernberg, and L. Tao, "Launch and recovery of a work class ROV through wave zone in small offshore service vessel," Ocean Engineering, vol. 309, p. 118541, 2024.
-# [2] M. Valen, "Launch and recovery of ROV: Investigation of operational limit from DNV Recommended Practices and time domain simulations in SIMO," Master thesis, Department of Marine Technology, NTNU, Trondheim, Norway, 2010.
+# Configuração de Testes de Robustez - NMPC BlueROV2
+# Alterações: Todos os parâmetros originais inclusos, com variações de 
+# ganho, direção e espalhamento para validação de robustez.
 
 default_scenario: moderate
 
 scenarios:
-
   calm:
     Hs: 1.25
     Tp: 7.03
     gamma: 1.5
     N: 64
     wave_dir: [1.0, 0.0]
+    directional_spread_deg: 15.0 # Maior que os 10.0 do treino
+    water_depth: 30.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -2.0
     scale: 0.25
     max_current: 0.14
     alpha_wave: 0.02
     noise_std: 0.005
     alpha_noise: 0.30
+    alpha_js: 0.0081
+    enable_wave_force: true # Ativado (no treino era false)
+    wave_force_gain: [15.0, 15.0, 20.0] # Ganho reduzido para mar calmo
+    wave_force_application_point: [0.0, 0.0, 0.05]
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
     seed: 42
 
   moderate:
@@ -24,12 +34,23 @@ scenarios:
     Tp: 8.0
     gamma: 3.3
     N: 64
-    wave_dir: [0.707, 0.707]
+    wave_dir: [0.5, 0.866] # Alterado de 45° para 60° (incidência diferente do treino)
+    directional_spread_deg: 25.0 # Maior que os 15.0 do treino
+    water_depth: 30.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -2.0
     scale: 0.50
     max_current: 0.50
     alpha_wave: 0.02
     noise_std: 0.010
     alpha_noise: 0.30
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain: [35.0, 35.0, 50.0]
+    wave_force_application_point: [0.0, 0.0, 0.05]
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
     seed: 42
 
   severe:
@@ -37,23 +58,21 @@ scenarios:
     Tp: 8.0
     gamma: 3.3
     N: 64
-    wave_dir: [0.0, 1.0]
+    wave_dir: [-0.707, 0.707] # Direção oblíqua oposta ao treino
+    directional_spread_deg: 35.0 # Maior que os 20.0 do treino
+    water_depth: 30.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -2.0
     scale: 0.80
     max_current: 0.80
     alpha_wave: 0.02
     noise_std: 0.020
     alpha_noise: 0.30
-    seed: 42
-
-  extreme:
-    Hs: 4.50
-    Tp: 8.0
-    gamma: 5.0
-    N: 128
-    wave_dir: [-1.0, 0.0]
-    scale: 1.20
-    max_current: 1.50
-    alpha_wave: 0.02
-    noise_std: 0.030
-    alpha_noise: 0.30
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain: [45.0, 45.0, 60.0] # Ganhos de força elevados para estresse
+    wave_force_application_point: [0.0, 0.0, 0.05]
+    max_wave_force: 30.0 # Limite de força expandido para testar extremos
+    max_wave_moment: 10.0 # Limite de momento expandido para testar extremos
     seed: 42

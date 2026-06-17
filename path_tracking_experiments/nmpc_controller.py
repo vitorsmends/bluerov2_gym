@@ -1,4 +1,4 @@
-"""CasADi/IPOPT NMPC controller for BlueROV2 path tracking."""
+"""CasADi/IPOPT NMPC controller for BlueROV2 path tracking with JONSWAP disturbances."""
 
 from __future__ import annotations
 
@@ -24,7 +24,11 @@ class NMPCController(BaseController):
             raise ValueError("horizon must be divisible by control_blocks.")
 
         self.block_size = self.N // self.control_blocks
-        self.nx, self.nu, self.nc = 12, 6, 3
+        
+        # nx = 12 estados
+        # nu = 6 entradas de controle
+        # ndw = 9 variáveis de perturbação (3 correntes + 6 forças de onda)
+        self.nx, self.nu, self.ndw = 12, 6, 9
 
         self.u_min = -40.0
         self.u_max = 40.0
@@ -83,13 +87,13 @@ class NMPCController(BaseController):
         prepare_start = time.perf_counter()
 
         x0 = self._pack_state(state)
-        current_forecast = self._forecast_current_sequence()
+        dist_forecast = self._forecast_disturbance_sequence()
         ref_sequence = self._build_reference_sequence(t)
 
         p = np.concatenate([
             x0,
             ref_sequence.reshape(-1),
-            current_forecast.reshape(-1),
+            dist_forecast.reshape(-1),
             self.prev_u,
         ])
 
@@ -146,7 +150,7 @@ class NMPCController(BaseController):
     def _build_casadi_solver(self):
         U_blocks = ca.MX.sym("U_blocks", self.control_blocks * self.nu)
 
-        n_params = self.nx + self.N * self.nx + self.N * self.nc + self.nu
+        n_params = self.nx + self.N * self.nx + self.N * self.ndw + self.nu
         P = ca.MX.sym("P", n_params)
 
         idx = 0
@@ -157,9 +161,9 @@ class NMPCController(BaseController):
         refs = ca.reshape(refs, self.nx, self.N)
         idx += self.N * self.nx
 
-        currents = P[idx:idx + self.N * self.nc]
-        currents = ca.reshape(currents, self.nc, self.N)
-        idx += self.N * self.nc
+        disturbances = P[idx:idx + self.N * self.ndw]
+        disturbances = ca.reshape(disturbances, self.ndw, self.N)
+        idx += self.N * self.ndw
 
         prev_u = P[idx:idx + self.nu]
 
@@ -174,7 +178,7 @@ class NMPCController(BaseController):
             block_idx = k // self.block_size
             u_k = U_blocks[block_idx * self.nu:(block_idx + 1) * self.nu]
 
-            x = self._casadi_dynamics_step(x, u_k, currents[:, k])
+            x = self._casadi_dynamics_step(x, u_k, disturbances[:, k])
             ref_k = refs[:, k]
             error = x - ref_k
 
@@ -209,10 +213,13 @@ class NMPCController(BaseController):
 
         self.solver = ca.nlpsol("solver", "ipopt", nlp, opts)
 
-    def _casadi_dynamics_step(self, x, thrust, nu_current):
+    def _casadi_dynamics_step(self, x, thrust, disturbance_k):
         eta = x[0:6]
         nu = x[6:12]
         phi, theta = eta[3], eta[4]
+
+        nu_current = disturbance_k[0:3]
+        tau_wave = disturbance_k[3:9]
 
         tau = ca.mtimes(ca.DM(self.dyn.allocation_matrix), thrust)
 
@@ -233,7 +240,7 @@ class NMPCController(BaseController):
         c_rb = self._casadi_spatial_cross_force(nu) @ (ca.DM(self.dyn.M_RB) @ nu)
         c_a = self._casadi_spatial_cross_force(nu_rel) @ (ca.DM(self.dyn.M_A) @ nu_rel)
 
-        rhs = tau - c_rb - c_a - damping - restoring
+        rhs = tau + tau_wave - c_rb - c_a - damping - restoring
         nu_dot = ca.solve(ca.DM(self.dyn.M), rhs)
 
         nu_next = nu + self.dt * nu_dot
@@ -328,14 +335,10 @@ class NMPCController(BaseController):
 
         return np.asarray(state, dtype=float).reshape(12).copy()
 
-    def _forecast_current_sequence(self) -> np.ndarray:
-        dyn_copy = copy.deepcopy(self.dyn)
-        forecast = np.zeros((self.N, 3), dtype=float)
-
-        for k in range(self.N):
-            forecast[k] = dyn_copy._jonswap_current()
-
-        return forecast
+    def _forecast_disturbance_sequence(self) -> np.ndarray:
+        # Retorna uma matriz preenchida com zeros para o horizonte de predição.
+        # Isso garante que o otimizador não possua conhecimento prévio das perturbações da planta.
+        return np.zeros((self.N, self.ndw), dtype=float)
 
     def _build_reference_sequence(self, t_start: float) -> np.ndarray:
         refs = np.zeros((self.N, 12), dtype=float)

@@ -14,6 +14,10 @@ class BaseController:
         """Reset internal controller state before a new experiment."""
         pass
 
-    def get_action(self, obs: dict, state: np.ndarray, reference: np.ndarray, t: float) -> np.ndarray:
-        """Return direct thruster commands [T1, ..., T6] in Newtons."""
+    def get_action(self, obs: dict, state: np.ndarray, reference: np.ndarray, t: float, **kwargs) -> np.ndarray:
+        """Return direct thruster commands [T1, ..., T6] in Newtons.
+
+        The **kwargs argument absorbs unexpected parameters (like info) sent by 
+        the experiment runner, ensuring backward compatibility with older controllers.
+        """
         raise NotImplementedError

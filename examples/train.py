@@ -1,7 +1,6 @@
 import os
 
 import gymnasium as gym
-import numpy as np
 
 from gymnasium.envs.registration import register
 
@@ -17,11 +16,10 @@ ENV_ID = "BlueRov-v0"
 
 LOG_DIR = "./bluerov_tensorboard/"
 MODEL_DIR = "./models/"
-MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo_curriculum")
-VECNORM_PATH = os.path.join(
-    MODEL_DIR,
-    "bluerov_vec_normalize_curriculum.pkl",
-)
+MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo")
+VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize.pkl")
+
+TOTAL_TIMESTEPS = 1_000_000
 
 
 if ENV_ID not in gym.envs.registry:
@@ -33,91 +31,40 @@ if ENV_ID not in gym.envs.registry:
 
 
 class TrainingProgressCallback(BaseCallback):
-    def __init__(
-        self,
-        total_timesteps: int,
-        phase_timesteps: int,
-        phase_name: str,
-        phase_index: int,
-        n_phases: int,
-        verbose: int = 0,
-    ):
+    def __init__(self, total_timesteps: int, verbose: int = 0):
         super().__init__(verbose)
-
         self.total_timesteps_target = int(total_timesteps)
-        self.phase_timesteps_target = int(phase_timesteps)
-        self.phase_name = phase_name
-        self.phase_index = phase_index
-        self.n_phases = n_phases
-
-        self.global_bar = None
-        self.phase_bar = None
-
-        self.last_global_n = 0
-        self.last_phase_n = 0
-        self.phase_start_num_timesteps = 0
+        self.progress_bar = None
+        self.last_n = 0
 
     def _on_training_start(self) -> None:
-        self.phase_start_num_timesteps = self.model.num_timesteps
+        self.last_n = min(self.model.num_timesteps, self.total_timesteps_target)
 
-        self.last_global_n = min(
-            self.model.num_timesteps,
-            self.total_timesteps_target,
-        )
-
-        self.last_phase_n = 0
-
-        self.global_bar = tqdm(
+        self.progress_bar = tqdm(
             total=self.total_timesteps_target,
-            initial=self.last_global_n,
-            desc="Total training",
+            initial=self.last_n,
+            desc="Training progress",
             unit="steps",
             dynamic_ncols=True,
             leave=True,
         )
 
-        self.phase_bar = tqdm(
-            total=self.phase_timesteps_target,
-            initial=0,
-            desc=f"Phase {self.phase_index}/{self.n_phases}: {self.phase_name}",
-            unit="steps",
-            dynamic_ncols=True,
-            leave=False,
-        )
-
     def _on_step(self) -> bool:
-        current_global_n = min(
-            self.model.num_timesteps,
-            self.total_timesteps_target,
-        )
+        current_n = min(self.model.num_timesteps, self.total_timesteps_target)
+        delta = current_n - self.last_n
 
-        current_phase_n = min(
-            self.model.num_timesteps - self.phase_start_num_timesteps,
-            self.phase_timesteps_target,
-        )
-
-        global_delta = current_global_n - self.last_global_n
-        phase_delta = current_phase_n - self.last_phase_n
-
-        if global_delta > 0:
-            self.global_bar.update(global_delta)
-            self.last_global_n = current_global_n
-
-        if phase_delta > 0:
-            self.phase_bar.update(phase_delta)
-            self.last_phase_n = current_phase_n
+        if delta > 0:
+            self.progress_bar.update(delta)
+            self.last_n = current_n
 
         return True
 
     def _on_training_end(self) -> None:
-        if self.phase_bar is not None:
-            remaining_phase = self.phase_timesteps_target - self.last_phase_n
-            if remaining_phase > 0:
-                self.phase_bar.update(remaining_phase)
-            self.phase_bar.close()
-
-        if self.global_bar is not None:
-            self.global_bar.refresh()
+        if self.progress_bar is not None:
+            remaining = self.total_timesteps_target - self.last_n
+            if remaining > 0:
+                self.progress_bar.update(remaining)
+            self.progress_bar.close()
 
 
 def make_env(render_mode=None, env_config=None):
@@ -175,46 +122,36 @@ def build_jonswap_params(
         "alpha_js": float(alpha_js),
         "enable_wave_force": bool(enable_wave_force),
         "wave_force_gain": tuple(float(v) for v in wave_force_gain),
-        "wave_force_application_point": tuple(
-            float(v) for v in wave_force_application_point
-        ),
+        "wave_force_application_point": tuple(float(v) for v in wave_force_application_point),
         "max_wave_force": float(max_wave_force),
         "max_wave_moment": float(max_wave_moment),
         "seed": int(seed),
     }
 
 
-def set_curriculum_level(env, jonswap_params):
-    base_env = env.envs[0].unwrapped
-
-    base_env.jonswap_params = jonswap_params.copy()
-
-    if hasattr(base_env.dynamics, "set_jonswap_params"):
-        base_env.dynamics.set_jonswap_params(**base_env.jonswap_params)
-    else:
-        base_env.dynamics.reset(jonswap_params=base_env.jonswap_params)
-
-
-def train_model_with_curriculum():
+def train_model():
     os.makedirs(LOG_DIR, exist_ok=True)
     os.makedirs(MODEL_DIR, exist_ok=True)
 
-    initial_jonswap = build_jonswap_params(
-        Hs=0.0,
+    moderate_jonswap = build_jonswap_params(
+        Hs=2.50,
         Tp=8.0,
-        gamma=1.0,
-        N=32,
-        wave_dir=(1.0, 0.0),
-        scale=0.0,
-        max_current=0.0,
-        noise_std=0.0,
-        directional_spread_deg=0.0,
-        enable_wave_force=False,
+        gamma=3.3,
+        N=64,
+        wave_dir=(0.707, 0.707),
+        scale=0.50,
+        max_current=0.50,
+        noise_std=0.010,
+        directional_spread_deg=25.0,
+        enable_wave_force=True,
+        max_wave_force=25.0,
+        max_wave_moment=8.0,
+        seed=42,
     )
 
     env_config = {
         "dt": 0.1,
-        "jonswap": initial_jonswap,
+        "jonswap": moderate_jonswap,
     }
 
     env = DummyVecEnv(
@@ -238,8 +175,19 @@ def train_model_with_curriculum():
     checkpoint_callback = CheckpointCallback(
         save_freq=100_000,
         save_path=MODEL_DIR,
-        name_prefix="bluerov_ppo_curriculum_checkpoint",
+        name_prefix="bluerov_ppo_moderate_checkpoint",
         save_vecnormalize=True,
+    )
+
+    progress_callback = TrainingProgressCallback(
+        total_timesteps=TOTAL_TIMESTEPS,
+    )
+
+    callback = CallbackList(
+        [
+            checkpoint_callback,
+            progress_callback,
+        ]
     )
 
     model = PPO(
@@ -265,151 +213,18 @@ def train_model_with_curriculum():
         ),
     )
 
-    lessons = [
-        {
-            "name": "No Waves",
-            "timesteps": 200_000,
-            "jonswap": build_jonswap_params(
-                Hs=0.0,
-                Tp=8.0,
-                gamma=1.0,
-                N=32,
-                wave_dir=(1.0, 0.0),
-                scale=0.0,
-                max_current=0.0,
-                noise_std=0.0,
-                directional_spread_deg=0.0,
-                enable_wave_force=False,
-            ),
-        },
-        {
-            "name": "Calm Sea - Head Waves",
-            "timesteps": 400_000,
-            "jonswap": build_jonswap_params(
-                Hs=1.25,
-                Tp=7.03,
-                gamma=1.5,
-                N=64,
-                wave_dir=(1.0, 0.0),
-                scale=0.25,
-                max_current=0.14,
-                noise_std=0.005,
-                directional_spread_deg=15.0,
-                enable_wave_force=True,
-                max_wave_force=15.0,
-                max_wave_moment=5.0,
-            ),
-        },
-        {
-            "name": "Moderate Sea - Quartering Waves",
-            "timesteps": 600_000,
-            "jonswap": build_jonswap_params(
-                Hs=2.50,
-                Tp=8.0,
-                gamma=3.3,
-                N=64,
-                wave_dir=(0.707, 0.707),
-                scale=0.50,
-                max_current=0.50,
-                noise_std=0.010,
-                directional_spread_deg=25.0,
-                enable_wave_force=True,
-                max_wave_force=25.0,
-                max_wave_moment=8.0,
-            ),
-        },
-        {
-            "name": "Severe Sea - Beam Waves",
-            "timesteps": 800_000,
-            "jonswap": build_jonswap_params(
-                Hs=4.50,
-                Tp=8.0,
-                gamma=3.3,
-                N=64,
-                wave_dir=(0.0, 1.0),
-                scale=0.80,
-                max_current=0.80,
-                noise_std=0.020,
-                directional_spread_deg=25.0,
-                enable_wave_force=True,
-                max_wave_force=35.0,
-                max_wave_moment=10.0,
-            ),
-        },
-        {
-            "name": "Extreme Sea - Following Waves",
-            "timesteps": 1_000_000,
-            "jonswap": build_jonswap_params(
-                Hs=4.50,
-                Tp=8.0,
-                gamma=5.0,
-                N=128,
-                wave_dir=(-1.0, 0.0),
-                scale=1.20,
-                max_current=1.50,
-                noise_std=0.030,
-                directional_spread_deg=35.0,
-                enable_wave_force=True,
-                wave_force_gain=(45.0, 45.0, 65.0),
-                max_wave_force=40.0,
-                max_wave_moment=12.0,
-            ),
-        },
-    ]
+    print("Iniciando treinamento sem curriculum learning...")
+    print("Cenário: Moderate Sea - Quartering Waves")
+    print(f"Total de timesteps: {TOTAL_TIMESTEPS:,}")
 
-    total_curriculum_timesteps = sum(lesson["timesteps"] for lesson in lessons)
+    model.learn(
+        total_timesteps=TOTAL_TIMESTEPS,
+        callback=callback,
+        tb_log_name="PPO_BlueROV2_Moderate",
+        reset_num_timesteps=True,
+    )
 
-    print("Iniciando treinamento estruturado por currículo...")
-    print(f"Total de timesteps planejado: {total_curriculum_timesteps:,}")
-
-    is_first_iteration = True
-
-    for index, lesson in enumerate(lessons):
-        jonswap_params = lesson["jonswap"]
-
-        print(
-            "\n[CURRICULUM] "
-            f"Etapa {index + 1}/{len(lessons)} | {lesson['name']}"
-        )
-        print(
-            "[CURRICULUM] "
-            f"Hs={jonswap_params['Hs']} m | "
-            f"Tp={jonswap_params['Tp']} s | "
-            f"gamma={jonswap_params['gamma']} | "
-            f"N={jonswap_params['N']} | "
-            f"max_current={jonswap_params['max_current']} m/s | "
-            f"scale={jonswap_params['scale']} | "
-            f"wave_force={jonswap_params['enable_wave_force']}"
-        )
-
-        set_curriculum_level(env, jonswap_params)
-        env.reset()
-
-        progress_callback = TrainingProgressCallback(
-            total_timesteps=total_curriculum_timesteps,
-            phase_timesteps=lesson["timesteps"],
-            phase_name=lesson["name"],
-            phase_index=index + 1,
-            n_phases=len(lessons),
-        )
-
-        callback = CallbackList(
-            [
-                checkpoint_callback,
-                progress_callback,
-            ]
-        )
-
-        model.learn(
-            total_timesteps=lesson["timesteps"],
-            callback=callback,
-            tb_log_name="PPO_BlueROV2_Curriculum",
-            reset_num_timesteps=is_first_iteration,
-        )
-
-        is_first_iteration = False
-
-    print("Treinamento por currículo finalizado com sucesso.")
+    print("Treinamento finalizado com sucesso.")
 
     model.save(MODEL_PATH)
     env.save(VECNORM_PATH)
@@ -420,4 +235,4 @@ def train_model_with_curriculum():
 
 
 if __name__ == "__main__":
-    train_model_with_curriculum()
+    train_model()

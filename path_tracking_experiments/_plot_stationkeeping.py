@@ -1,14 +1,19 @@
 import os
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+import yaml
+from pathlib import Path
 
-INPUT_DIR = Path("results/stationkeeping")
-OUTPUT_DIR = Path("results/plots_stationkeeping")
-TABLE_DIR = Path("results/tables_stationkeeping")
+with open("path_tracking_experiments/jonswap_config.yaml", "r") as f:
+    config = yaml.safe_load(f)
+    config_default = config.get("default_scenario")
+
+INPUT_DIR = Path(f"results-{config_default}/stationkeeping")
+OUTPUT_DIR = Path(f"results-{config_default}/plots_stationkeeping")
+TABLE_DIR = Path(f"results-{config_default}/tables_stationkeeping")
 
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 TABLE_DIR.mkdir(parents=True, exist_ok=True)

@@ -14,15 +14,23 @@ from smc_controller import SMCController
 from nmpc_controller import NMPCController
 from ppo_controller import PPOController
 
+import yaml
+from pathlib import Path
 
-OUTPUT_DIR = Path("results/stationkeeping")
+yaml_path = Path("path_tracking_experiments/jonswap_config.yaml")
+with open(yaml_path, "r") as f:
+    config = yaml.safe_load(f)
+    config_default = config.get("default_scenario")
+
+
+OUTPUT_DIR = Path(f"results-{config_default}/stationkeeping")
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 DT = 0.1
-STEPS = 1000
-REPETITIONS = 10
+STEPS = 500
+REPETITIONS = 5
 
-CONTROLLERS = ["pid", "smc", "nmpc", "ppo"]
+CONTROLLERS = ["pid", "smc", "nmpc", "ppo", "lqr"]
 
 CONFIG_PATH = Path(__file__).resolve().parent / "jonswap_config.yaml"
 

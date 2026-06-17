@@ -10,8 +10,12 @@ __pycache__/
 *.zip
 *.pkl
 *.json
+*.csv
 ppo_traj_tensorboard/
 bluerov_tensorboard/
+results/
+results-moderate/
+results-severe/
 
 # Distribution / packaging
 .Python

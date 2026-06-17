@@ -1,23 +1,20 @@
 """
-Efficient NMPC design report for BlueROV2 path tracking.
+Efficient NMPC design report for BlueROV2 path tracking with JONSWAP disturbances.
 
 Goal:
-    Reduce computational cost while preserving nonlinear prediction.
+    Reduce computational cost while preserving nonlinear prediction and disturbance rejection.
 
 Main strategy:
     - Shorter prediction horizon
     - Move blocking
-    - JONSWAP current forecast by blocks
+    - JONSWAP current and wave force forecast by blocks
     - Terminal cost compensation
     - Input-rate penalty
-
-The full environment may still use the complete 6-DoF dynamics.
-The controller only reduces the number of decision variables.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import json
 import numpy as np
 
@@ -34,7 +31,7 @@ class EfficientNMPCDesignConfig:
     dt: float = 0.1
 
     # JONSWAP peak period from the plant model
-    Tp: float = 6.0
+    Tp: float = 12.0
 
     # Efficient horizon
     horizon_steps: int = 10
@@ -84,6 +81,11 @@ class EfficientNMPCDesignConfig:
     pitch_soft_limit_deg: float = 25.0
     attitude_soft_weight: float = 600.0
 
+    # Disturbance parameters to pass to the NMPC internal predictor
+    max_expected_current: float = 0.7
+    max_expected_wave_force: float = 25.0
+    max_expected_wave_moment: float = 8.0
+
     # Solver
     solver_name: str = "SLSQP"
     solver_ftol: float = 3e-3
@@ -99,6 +101,7 @@ class EfficientNMPCDesign:
     ]
 
     input_names = ["T1", "T2", "T3", "T4", "T5", "T6"]
+    disturbance_names = ["u_c", "v_c", "w_c", "X_w", "Y_w", "Z_w", "K_w", "M_w", "N_w"]
 
     def __init__(self, cfg: EfficientNMPCDesignConfig):
         self.cfg = cfg
@@ -177,8 +180,8 @@ class EfficientNMPCDesign:
 
     def to_dict(self) -> dict:
         return {
-            "controller_type": "Efficient NMPC",
-            "main_strategy": "move blocking with nonlinear 6-DoF prediction",
+            "controller_type": "Efficient NMPC with Disturbance Aware Predictor",
+            "main_strategy": "move blocking with nonlinear 6-DoF prediction and frozen disturbance blocks",
             "dt": self.cfg.dt,
             "jonswap_peak_period_Tp": self.cfg.Tp,
             "horizon_steps": self.cfg.horizon_steps,
@@ -190,12 +193,18 @@ class EfficientNMPCDesign:
             "decision_variable_reduction_percent": self.reduction_percent,
             "state_names": self.state_names,
             "input_names": self.input_names,
+            "disturbance_names": self.disturbance_names,
             "state_max": self.state_max.tolist(),
             "state_priorities": self.state_priorities.tolist(),
             "Q_diag": np.diag(self.Q).tolist(),
             "Qf_diag": np.diag(self.Qf).tolist(),
             "R_diag": np.diag(self.R).tolist(),
             "R_delta_diag": np.diag(self.R_delta).tolist(),
+            "disturbance_bounds": {
+                "max_expected_current_m_s": self.cfg.max_expected_current,
+                "max_expected_wave_force_N": self.cfg.max_expected_wave_force,
+                "max_expected_wave_moment_Nm": self.cfg.max_expected_wave_moment,
+            },
             "input_bounds_N": {
                 "min": self.cfg.thrust_min,
                 "max": self.cfg.thrust_max,
@@ -213,8 +222,9 @@ class EfficientNMPCDesign:
             },
             "implementation_note": (
                 "The optimizer decides one 6-thruster command per block. "
-                "Each command is held constant for block_size simulation steps "
-                "inside the prediction horizon."
+                "Disturbances (nu_c and tau_wave) must be evaluated at time t and "
+                "passed as parameter vectors to the NMPC solver, remaining constant "
+                "or updated block by block over the horizon."
             ),
         }
 
@@ -222,14 +232,14 @@ class EfficientNMPCDesign:
         np.set_printoptions(precision=6, suppress=True)
 
         print("\n" + "=" * 80)
-        print("EFFICIENT NMPC DESIGN REPORT")
+        print("EFFICIENT NMPC DESIGN REPORT (DISTURBANCE AWARE)")
         print("=" * 80)
 
-        print("\nHorizon")
+        print("\nHorizon & Environment")
         print(f"  dt: {self.cfg.dt:.3f} s")
         print(f"  N: {self.cfg.horizon_steps}")
         print(f"  prediction horizon: {self.prediction_horizon_s:.3f} s")
-        print(f"  JONSWAP Tp: {self.cfg.Tp:.3f} s")
+        print(f"  JONSWAP Tp (Updated): {self.cfg.Tp:.3f} s")
         print(f"  horizon/Tp: {self.prediction_horizon_s / self.cfg.Tp:.3f}")
 
         print("\nMove blocking")
@@ -238,6 +248,11 @@ class EfficientNMPCDesign:
         print(f"  full decision variables: {self.full_decision_variables}")
         print(f"  blocked decision variables: {self.blocked_decision_variables}")
         print(f"  reduction: {self.reduction_percent:.1f}%")
+
+        print("\nDisturbance Handling Limits")
+        print(f"  Max expected current (nu_c): {self.cfg.max_expected_current:.2f} m/s")
+        print(f"  Max expected wave force (tau_w): {self.cfg.max_expected_wave_force:.2f} N")
+        print(f"  Max expected wave moment (tau_w): {self.cfg.max_expected_wave_moment:.2f} Nm")
 
         print("\nQ diagonal")
         print(np.diag(self.Q))
@@ -275,13 +290,13 @@ class EfficientNMPCDesign:
 def main():
     cfg = EfficientNMPCDesignConfig(
         dt=0.1,
-        Tp=6.0,
+        Tp=12.0,  # Sincronizado com os 12 segundos do novo modelo JONSWAP
 
         # Efficient setting
         horizon_steps=10,
         control_blocks=5,
 
-        # Slightly relaxed admissible errors
+        # Admissible errors
         max_x_error=0.30,
         max_y_error=0.30,
         max_z_error=0.25,
@@ -311,6 +326,11 @@ def main():
 
         input_priority=0.08,
         input_rate_priority=0.35,
+
+        # Casamento com os limites superiores do modelo de ondas
+        max_expected_current=0.7,
+        max_expected_wave_force=25.0,
+        max_expected_wave_moment=8.0,
 
         solver_name="SLSQP",
         solver_ftol=3e-3,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import inspect
 import time
 from pathlib import Path
 
@@ -75,6 +76,13 @@ def run_path_tracking_experiment(
     rows = []
     start = time.time()
 
+    # Verifica dinamicamente os parâmetros aceitos pelo get_action do controlador atual
+    # para evitar falhas de assinatura em controladores antigos que não possuem o argumento 'info'
+    get_action_params = inspect.signature(controller.get_action).parameters
+    accepts_info = "info" in get_action_params or any(
+        p.kind == inspect.Parameter.VAR_KEYWORD for p in get_action_params.values()
+    )
+
     for rep in range(repetitions):
         rep_seed = None if seed is None else int(seed + rep)
         rep_jonswap_params = _build_repetition_jonswap_params(
@@ -89,12 +97,13 @@ def run_path_tracking_experiment(
             }
 
         try:
-            obs, _ = env.reset(
+            obs, info = env.reset(
                 seed=rep_seed,
                 options=reset_options,
             )
         except TypeError:
             obs, _ = env.reset()
+            info = {}
 
             if rep_jonswap_params is not None:
                 env.unwrapped.dynamics.reset(
@@ -116,12 +125,22 @@ def run_path_tracking_experiment(
             reference = trajectory.get_reference(t)
             errors = tracking_errors(state, reference)
 
-            action = controller.get_action(
-                obs=obs,
-                state=state,
-                reference=reference,
-                t=t,
-            )
+            # Executa a chamada adaptativa baseada na capacidade de reflexão do controlador
+            if accepts_info:
+                action = controller.get_action(
+                    obs=obs,
+                    state=state,
+                    reference=reference,
+                    t=t,
+                    info=info,
+                )
+            else:
+                action = controller.get_action(
+                    obs=obs,
+                    state=state,
+                    reference=reference,
+                    t=t,
+                )
 
             controller_metrics = _get_controller_metrics(controller)
 
