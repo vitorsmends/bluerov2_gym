@@ -5,6 +5,10 @@ __pycache__/
 
 # C extensions
 *.so
+*.png
+*.csv
+plots*
+ppo*
 
 # Distribution / packaging
 .Python
