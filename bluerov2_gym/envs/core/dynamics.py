@@ -1,5 +1,6 @@
 import numpy as np
 
+from bluerov2_gym.envs.core.config_utils import load_yaml
 
 class Dynamics:
     """
@@ -29,158 +30,106 @@ class Dynamics:
         np.array([T1, T2, T3, T4, T5, T6])
     """
 
-    def __init__(self, jonswap_params: dict | None = None):
-        self.dt = 0.1
-        self.rho = 1000.0
-        self.g = 9.81
+    def __init__(
+        self,
+        jonswap_params: dict | None = None,
+        dynamics_config: dict | None = None,
+    ):
+        if isinstance(dynamics_config, (str, bytes)):
+            dynamics_config = load_yaml(dynamics_config)
+        cfg = dynamics_config or {}
 
-        # ------------------------------------------------------------
-        # Physical parameters from BlueROV2 Xacro
-        # ------------------------------------------------------------
-        self.base_mass = 14.8
-        self.prop_mass = 0.07
-        self.n_thrusters = 6
+        self.dt = float(cfg.get("dt", 0.1))
+        self.rho = float(cfg.get("rho", 1000.0))
+        self.g = float(cfg.get("g", 9.81))
 
+        vehicle = cfg.get("vehicle", {})
+        self.base_mass = float(vehicle.get("base_mass", 14.8))
+        self.prop_mass = float(vehicle.get("prop_mass", 0.07))
+        self.n_thrusters = int(vehicle.get("n_thrusters", 6))
         self.m = self.base_mass + self.n_thrusters * self.prop_mass
 
-        self.x_size = 0.40
-        self.y_size = 0.25
-        self.z_size = 0.10
+        dimensions = vehicle.get("dimensions", {})
+        self.x_size = float(dimensions.get("x", 0.40))
+        self.y_size = float(dimensions.get("y", 0.25))
+        self.z_size = float(dimensions.get("z", 0.10))
 
-        self.buoyant_correction = 1.01 * (
+        buoyancy = cfg.get("buoyancy", {})
+        correction_factor = float(buoyancy.get("correction_factor", 1.01))
+        self.buoyant_correction = correction_factor * (
             self.m / (self.rho * self.x_size * self.y_size * self.z_size)
         ) ** (1.0 / 3.0)
 
-        self.volume = (
-            self.x_size
-            * self.y_size
-            * self.z_size
-            * self.buoyant_correction**3
-        )
+        self.volume = self.x_size * self.y_size * self.z_size * self.buoyant_correction**3
 
-        self.r_g = np.array(
-            [0.0, 0.0, -self.buoyant_correction * self.z_size],
-            dtype=float,
-        )
-
-        self.r_b = np.array(
-            [0.0, 0.0, -self.buoyant_correction * self.z_size / 4.0],
-            dtype=float,
-        )
+        default_rg = [0.0, 0.0, -self.buoyant_correction * self.z_size]
+        default_rb = [0.0, 0.0, -self.buoyant_correction * self.z_size / 4.0]
+        self.r_g = np.asarray(buoyancy.get("center_of_gravity", default_rg), dtype=float)
+        self.r_b = np.asarray(buoyancy.get("center_of_buoyancy", default_rb), dtype=float)
 
         self.z_cog = self.r_g[2]
         self.z_cob = self.r_b[2]
         self.coBM = abs(self.z_cob - self.z_cog)
-
         self.W = self.m * self.g
         self.B_force = self.rho * self.g * self.volume
 
-        # ------------------------------------------------------------
-        # Rigid-body inertia
-        # ------------------------------------------------------------
-        self.Ixx = 5.2539
-        self.Ixy = 0.0144
-        self.Ixz = 0.3341
-        self.Iyy = 7.9420
-        self.Iyz = 0.0260
-        self.Izz = 6.9123
-
-        self.I_g = np.array(
-            [
-                [self.Ixx, self.Ixy, self.Ixz],
-                [self.Ixy, self.Iyy, self.Iyz],
-                [self.Ixz, self.Iyz, self.Izz],
-            ],
-            dtype=float,
-        )
-
+        inertia = vehicle.get("inertia", {})
+        self.Ixx = float(inertia.get("Ixx", 5.2539))
+        self.Ixy = float(inertia.get("Ixy", 0.0144))
+        self.Ixz = float(inertia.get("Ixz", 0.3341))
+        self.Iyy = float(inertia.get("Iyy", 7.9420))
+        self.Iyz = float(inertia.get("Iyz", 0.0260))
+        self.Izz = float(inertia.get("Izz", 6.9123))
+        self.I_g = np.array([
+            [self.Ixx, self.Ixy, self.Ixz],
+            [self.Ixy, self.Iyy, self.Iyz],
+            [self.Ixz, self.Iyz, self.Izz],
+        ], dtype=float)
         self.M_RB = self._rigid_body_mass_matrix()
 
-        # ------------------------------------------------------------
-        # Added mass
-        # ------------------------------------------------------------
-        self.added_mass = np.array(
-            [5.5, 12.7, 14.57, 0.12, 0.12, 0.12],
+        hydrodynamics = cfg.get("hydrodynamics", {})
+        self.added_mass = np.asarray(
+            hydrodynamics.get("added_mass", [5.5, 12.7, 14.57, 0.12, 0.12, 0.12]),
             dtype=float,
         )
-
         self.M_A = np.diag(self.added_mass)
         self.M = self.M_RB + self.M_A
-
-        # ------------------------------------------------------------
-        # Hydrodynamic damping
-        # ------------------------------------------------------------
-        self.D_lin = np.array(
-            [25.15, 7.364, 17.955, 10.888, 20.761, 3.744],
+        self.D_lin = np.asarray(
+            hydrodynamics.get("linear_damping", [25.15, 7.364, 17.955, 10.888, 20.761, 3.744]),
+            dtype=float,
+        )
+        self.D_quad = np.asarray(
+            hydrodynamics.get("quadratic_damping", [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0]),
             dtype=float,
         )
 
-        self.D_quad = np.array(
-            [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0],
-            dtype=float,
-        )
-
-        # ------------------------------------------------------------
-        # Thruster allocation matrix
-        # ------------------------------------------------------------
-        self.thruster_min = -40.0
-        self.thruster_max = 40.0
-
-        self.allocation_matrix = np.array(
-            [
+        thrusters = cfg.get("thrusters", {})
+        self.thruster_min = float(thrusters.get("min", -40.0))
+        self.thruster_max = float(thrusters.get("max", 40.0))
+        self.allocation_matrix = np.asarray(
+            thrusters.get("allocation_matrix", [
                 [0.70710678, 0.70710678, 0.70710678, 0.70710678, 0.0, 0.0],
                 [0.70710678, -0.70710678, -0.70710678, 0.70710678, 0.0, 0.0],
                 [0.0, 0.0, 0.0, 0.0, 1.0, -1.0],
                 [0.05126524, -0.05126524, -0.05126524, 0.05126524, -0.1105, -0.1105],
                 [-0.05126524, -0.05126524, -0.05126524, -0.05126524, -0.0025, 0.0025],
                 [0.16652365, -0.16652365, 0.17500893, -0.17500893, 0.0, 0.0],
-            ],
+            ]),
             dtype=float,
         )
 
-        # ------------------------------------------------------------
-        # Directional JONSWAP + LWT disturbance parameters
-        # ------------------------------------------------------------
-        self.jonswap_params = {
-            "Hs": 2.0,
-            "Tp": 12.0,
-            "gamma": 3.3,
-            "N": 64,
-
-            # Dominant propagation direction
-            "wave_dir": (0.5, 0.5),
-
-            # Directional spread around wave_dir [deg]
-            "directional_spread_deg": 25.0,
-
-            # Water depth and evaluation point
-            "water_depth": 30.0,
-            "x_eval": 0.0,
-            "y_eval": 0.0,
-            "z_eval": -2.0,
-
-            # Scaling and saturation
-            "scale": 0.5,
-            "max_current": 0.7,
-
-            # Low-pass filtering and noise
-            "alpha_wave": 0.02,
-            "noise_std": 0.01,
-            "alpha_noise": 0.3,
-
-            # JONSWAP Phillips constant
-            "alpha_js": 0.0081,
-
-            # Direct wave force model
-            "enable_wave_force": True,
-            "wave_force_gain": (35.0, 35.0, 50.0),
+        default_jonswap = {
+            "Hs": 2.0, "Tp": 12.0, "gamma": 3.3, "N": 64,
+            "wave_dir": (0.5, 0.5), "directional_spread_deg": 25.0,
+            "water_depth": 30.0, "x_eval": 0.0, "y_eval": 0.0, "z_eval": -2.0,
+            "scale": 0.5, "max_current": 0.7, "alpha_wave": 0.02,
+            "noise_std": 0.01, "alpha_noise": 0.3, "alpha_js": 0.0081,
+            "enable_wave_force": True, "wave_force_gain": (35.0, 35.0, 50.0),
             "wave_force_application_point": (0.0, 0.0, 0.05),
-            "max_wave_force": 25.0,
-            "max_wave_moment": 8.0,
-
-            "seed": 42,
+            "max_wave_force": 25.0, "max_wave_moment": 8.0, "seed": 42,
         }
-
+        self.jonswap_params = default_jonswap.copy()
+        self.jonswap_params.update(cfg.get("jonswap", {}))
         if jonswap_params is not None:
             self.jonswap_params.update(jonswap_params)
 

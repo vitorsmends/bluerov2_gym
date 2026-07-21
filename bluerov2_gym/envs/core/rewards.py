@@ -1,15 +1,33 @@
 import numpy as np
 
 
-class Reward:
-    def __init__(self):
-        self.w_pos = 1.0
-        self.w_vel = 0.1
-        self.w_yaw = 0.5
-        self.w_stab = 0.5
+DEFAULT_REWARD_CONFIG = {
+    "weights": {
+        "position": 1.0,
+        "velocity": 0.1,
+        "yaw": 0.5,
+        "stability": 0.5,
+    },
+    "success": {
+        "radius": 0.20,
+        "bonus": 1.0,
+    },
+}
 
-        self.success_radius = 0.20
-        self.success_bonus = 1.0
+
+class Reward:
+    def __init__(self, config: dict | None = None):
+        cfg = config or {}
+        weights = cfg.get("weights", {})
+        success = cfg.get("success", {})
+
+        self.w_pos = float(weights.get("position", 1.0))
+        self.w_vel = float(weights.get("velocity", 0.1))
+        self.w_yaw = float(weights.get("yaw", 0.5))
+        self.w_stab = float(weights.get("stability", 0.5))
+
+        self.success_radius = float(success.get("radius", 0.20))
+        self.success_bonus = float(success.get("bonus", 1.0))
 
     def _scalar(self, value):
         return float(np.asarray(value).reshape(-1)[0])

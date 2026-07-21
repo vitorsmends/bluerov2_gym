@@ -1,204 +1,84 @@
-# BlueROV2 Gymnasium Environment
+# BlueROV2 Gymnasium
 
-A Gymnasium environment for simulating and training reinforcement learning agents on the BlueROV2 underwater vehicle. This environment provides a realistic simulation of the BlueROV2's dynamics and supports various control tasks.
+A Gymnasium-compatible simulation environment for the **BlueROV2**
+autonomous underwater vehicle (AUV). The project provides a realistic
+six-degree-of-freedom dynamic model, configurable ocean disturbances,
+reinforcement learning support, classical control benchmarks, and an
+experiment framework for reproducible controller evaluation.
 
-<img width="1033" alt="image" src="https://github.com/user-attachments/assets/4052cdb7-5376-4b18-be28-64025c6c232a">
+## Features
 
-## 🌊 Features
+-   Six-DoF BlueROV2 dynamic model
+-   Gymnasium-compatible API
+-   Stable-Baselines3 integration
+-   MeshCat visualization
+-   Ocean current and JONSWAP disturbances
+-   PID, PPO, SMC and NMPC controllers
+-   Experiment framework with YAML configuration
+-   Automatic logging, CSV export and plotting
 
-- **Realistic Physics**: Implements validated hydrodynamic model of the BlueROV2
-- **3D Visualization**: Real-time 3D rendering using Meshcat
-- **Custom Rewards**: Configurable reward functions for different tasks
-- **Disturbance Modeling**: Includes environmental disturbances for realistic underwater conditions
-- **Stable-Baselines3 Compatible**: Ready to use with popular RL frameworks
-- **Customizable Environment**: Easy to modify for different underwater tasks
-- (Future release: spawn multiple AUVs)
+## Installation
 
-## 🛠️ Installation
-
-### Prerequisites
-- Python ≥3.10
-- [uv](https://github.com/astral-sh/uv) (recommended) or pip
-
-### Using uv (Recommended)
-```bash
-# Clone the repository
+``` bash
 git clone https://github.com/gokulp01/bluerov2_gym.git
 cd bluerov2_gym
-
-# Create and activate a virtual environment
 uv venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install the package
+source .venv/bin/activate
 uv pip install -e .
 ```
 
-### Using pip
-```bash
-# Clone the repository
-git clone https://github.com/gokulp01/bluerov2_gym.git
-cd bluerov2_gym
+## Quick Start
 
-# Create and activate a virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-
-# Install the package
-pip install -e .
-```
-
-## 🎮 Usage
-
-### Basic Usage
-```python
+``` python
 import gymnasium as gym
 import bluerov2_gym
 
-# Create the environment
-env = gym.make("BlueRov-v0", render_mode="human")
-
-# Reset the environment
-observation, info = env.reset()
-
-# Run a simple control loop
-while True:
-    # Take a random action
-    action = env.action_space.sample()
-    observation, reward, terminated, truncated, info = env.step(action)
-    
-    if terminated or truncated:
-        observation, info = env.reset()
+env = gym.make('BlueRov-v0')
+obs, info = env.reset()
 ```
 
-### Training with Stable-Baselines3 (refer to examples/train.py for full code example) 
-```python
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+## Experiment Framework
 
-# Create and wrap the environment
-env = gym.make("BlueRov-v0")
-env = DummyVecEnv([lambda: env])
-env = VecNormalize(env)
+Run:
 
-# Initialize the agent
-model = PPO("MultiInputPolicy", env, verbose=1)
-
-# Train the agent
-model.learn(total_timesteps=1_000_000)
-
-# Save the trained model
-model.save("bluerov_ppo")
+``` bash
+python experiments/run_experiment.py
 ```
 
-## 🎯 Environment Details
+Implemented controllers:
 
-### State Space
-The environment uses a Dictionary observation space containing:
-- `x, y, z`: Position coordinates
-- `theta`: Yaw angle
-- `vx, vy, vz`: Linear velocities
-- `omega`: Angular velocity
+-   PID
+-   PPO
+-   Sliding Mode Control (SMC)
+-   Nonlinear Model Predictive Control (NMPC)
 
-### Action Space
-Continuous action space with 4 dimensions:
-- Forward/Backward thrust
-- Left/Right thrust
-- Up/Down thrust
-- Yaw rotation
+Configuration files:
 
-### Reward Function
-The default reward function considers:
-- Position error from target
-- Velocity penalties
-- Orientation error
-- Custom rewards can be implemented by extending the `Reward` class
+-   experiments/config/experiment.yaml
+-   experiments/config/ocean_environment.yaml
 
-## 📊 Examples
+The framework automatically executes experiments, records metrics,
+exports CSV files and generates plots.
 
-The `examples` directory contains several scripts demonstrating different uses:
+## Environment
 
-- `test.py`: Basic environment testing with manual control and evaluation with trained model
-- `train.py`: Training script using PPO
+State:
 
-### Running Examples
-```bash
-# Test environment with manual control
-python examples/test.py
+    [x,y,z,roll,pitch,yaw,u,v,w,p,q,r]
 
-# Train an agent
-python examples/train.py
-```
+Action:
 
-## 🖼️ Visualization
+    [t1,t2,t3,t4,t5,t6]
 
-The environment uses Meshcat for 3D visualization. When running with `render_mode="human"`, a web browser window will open automatically showing the simulation. The visualization includes:
-- Water surface effects
-- Underwater environment
-- ROV model
-- Ocean floor with decorative elements (I am no good at this) 
+## Repository Structure
 
-## 📚 Project Structure
-```
-bluerov2_gym/
-├── bluerov2_gym/              # Main package directory
-│   ├── assets/               # 3D models and resources
-│   └── envs/                 # Environment implementation
-│       ├── core/            # Core components
-│       │   ├── dynamics.py  # Physics simulation
-│       │   ├── rewards.py   # Reward functions
-│       │   ├── state.py     # State management
-│       │   └── visualization/
-│       │       └── renderer.py  # 3D visualization
-│       └── bluerov_env.py    # Main environment class
-├── examples/                  # Example scripts
-├── tests/                    # Test cases
-└── README.md
-```
+    bluerov2_gym/
+    ├── bluerov2_gym/
+    ├── experiments/
+    ├── examples/
+    ├── tests/
+    └── README.md
 
-## 🔧 Configuration
+## License
 
-The environment can be configured through various parameters:
-- Physics parameters in `dynamics.py`
-- Reward weights in `rewards.py`
-- Visualization settings in `renderer.py`
-
-## 📝 Citation
-
-If you use this environment in your research, please cite:
-```bibtex
-@article{puthumanaillam2024tabfieldsmaximumentropyframework,
-title={TAB-Fields: A Maximum Entropy Framework for Mission-Aware Adversarial Planning},
-author={Gokul Puthumanaillam and Jae Hyuk Song and Nurzhan Yesmagambet and Shinkyu Park and Melkior Ornik},
-year={2024},
-eprint={2412.02570},
-archivePrefix={arXiv},
-url={https://arxiv.org/abs/2412.02570} } 
-}
-```
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request. For major changes, please open an issue first to discuss what you would like to change.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License
-
-## 🙏 Acknowledgements
-
-- BlueRobotics for the BlueROV2 specifications
-- OpenAI/Farama Foundation for the Gymnasium framework
-- Meshcat for the visualization library
-
-## 📧 Contact
-
-Gokul Puthumanaillam - [@gokulp01](https://github.com/gokulp01) - [gokulp2@illinois.edu]
-
-Project Link: [https://github.com/gokulp01/bluerov2_gym](https://github.com/gokulp01/bluerov2_gym)
+MIT License.

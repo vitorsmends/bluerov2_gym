@@ -5,14 +5,22 @@ from __future__ import annotations
 import time
 import numpy as np
 
-from base_controller import BaseController
-from env_utils import wrap_angle
+from .base import BaseController
+from ..env_utils import wrap_angle
 
 
 class PIDController(BaseController):
     name = "pid"
 
-    def __init__(self, dynamics=None, dt: float = 0.1):
+    def __init__(
+        self,
+        dynamics=None,
+        dt: float = 0.1,
+        reference_provider=None,
+        **kwargs,
+    ):
+        del reference_provider, kwargs
+
         self.dt = float(dt)
         self.dynamics = dynamics
 
@@ -23,7 +31,10 @@ class PIDController(BaseController):
         self.ki = np.array([0.12, 0.17, 0.23, 0.0, 0.0, 0.05], dtype=float)
         self.kd = np.array([2.80, 1.85, 3.20, 0.55, 1.05, 0.45], dtype=float)
 
-        self.integral_limit = np.array([1.0, 1.0, 0.8, 0.3, 0.3, 0.5], dtype=float)
+        self.integral_limit = np.array(
+            [1.0, 1.0, 0.8, 0.3, 0.3, 0.5],
+            dtype=float,
+        )
 
         self.thrust_limit = 40.0
         self.max_delta_thrust = 8.0

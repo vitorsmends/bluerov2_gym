@@ -8,15 +8,15 @@ experiments using PID, MPC and PPO controllers.
 Copy this folder to the root of the `bluerov2_gym` project and run:
 
 ```bash
-python path_tracking_experiments/run_pid.py
-python path_tracking_experiments/run_mpc.py
-python path_tracking_experiments/run_ppo.py
+python experiments/run_pid.py
+python experiments/run_mpc.py
+python experiments/run_ppo.py
 ```
 
 Or run all experiments:
 
 ```bash
-python path_tracking_experiments/run_all.py
+python experiments/run_all.py
 ```
 
 ## Outputs
@@ -24,7 +24,7 @@ python path_tracking_experiments/run_all.py
 CSV files are saved to:
 
 ```text
-results/path_tracking/
+results/experiments/
 ```
 
 The main metric is:

@@ -6,11 +6,11 @@ from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset
 
 import yaml
 
-with open("path_tracking_experiments/jonswap_config.yaml", "r") as f:
+with open("experiments/ocean_environment.yaml", "r") as f:
     config = yaml.safe_load(f)
     config_default = config.get("default_scenario")
     
-INPUT_DIR = "results-{}/path_tracking" .format(config_default)
+INPUT_DIR = "results-{}/experiments" .format(config_default)
 OUTPUT_DIR = "results-{}/plots_computational_cost" .format(config_default)
 TABLE_DIR = "results-{}/tables_computational_cost" .format(config_default)
 

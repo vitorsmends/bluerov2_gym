@@ -12,8 +12,8 @@ import numpy as np
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
-from base_controller import BaseController
-from env_utils import ENV_ID, build_tracking_observation
+from .base import BaseController
+from ..env_utils import ENV_ID, build_tracking_observation
 
 
 class PPOController(BaseController):

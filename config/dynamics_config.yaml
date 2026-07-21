@@ -1,35 +1,64 @@
-physics:
-  rho: 1000.0
-  g: 9.81
+dt: 0.1
+rho: 1000.0
+g: 9.81
+
+vehicle:
   base_mass: 14.8
   prop_mass: 0.07
   n_thrusters: 6
-  x_size: 0.40
-  y_size: 0.25
-  z_size: 0.10
+  dimensions:
+    x: 0.40
+    y: 0.25
+    z: 0.10
+  inertia:
+    Ixx: 5.2539
+    Ixy: 0.0144
+    Ixz: 0.3341
+    Iyy: 7.9420
+    Iyz: 0.0260
+    Izz: 6.9123
 
-inertia:
-  Ixx: 5.2539
-  Ixy: 0.0144
-  Ixz: 0.3341
-  Iyy: 7.9420
-  Iyz: 0.0260
-  Izz: 6.9123
+buoyancy:
+  correction_factor: 1.01
+  # center_of_gravity and center_of_buoyancy are omitted intentionally.
+  # Their original computed defaults remain active.
 
-added_mass: [5.5, 12.7, 14.57, 0.12, 0.12, 0.12]
+hydrodynamics:
+  added_mass: [5.5, 12.7, 14.57, 0.12, 0.12, 0.12]
+  linear_damping: [25.15, 7.364, 17.955, 10.888, 20.761, 3.744]
+  quadratic_damping: [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0]
 
-damping:
-  lin: [25.15, 7.364, 17.955, 10.888, 20.761, 3.744]
-  quad: [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0]
-
-thruster_limits:
+thrusters:
   min: -40.0
   max: 40.0
+  allocation_matrix:
+    - [0.70710678, 0.70710678, 0.70710678, 0.70710678, 0.0, 0.0]
+    - [0.70710678, -0.70710678, -0.70710678, 0.70710678, 0.0, 0.0]
+    - [0.0, 0.0, 0.0, 0.0, 1.0, -1.0]
+    - [0.05126524, -0.05126524, -0.05126524, 0.05126524, -0.1105, -0.1105]
+    - [-0.05126524, -0.05126524, -0.05126524, -0.05126524, -0.0025, 0.0025]
+    - [0.16652365, -0.16652365, 0.17500893, -0.17500893, 0.0, 0.0]
 
-allocation_matrix:
-  - [0.70710678, 0.70710678, 0.70710678, 0.70710678, 0.0, 0.0]
-  - [0.70710678, -0.70710678, -0.70710678, 0.70710678, 0.0, 0.0]
-  - [0.0, 0.0, 0.0, 0.0, 1.0, -1.0]
-  - [0.05126524, -0.05126524, -0.05126524, 0.05126524, -0.1105, -0.1105]
-  - [-0.05126524, -0.05126524, -0.05126524, -0.05126524, -0.0025, 0.0025]
-  - [0.16652365, -0.16652365, 0.17500893, -0.17500893, 0.0, 0.0]
+jonswap:
+  Hs: 2.0
+  Tp: 12.0
+  gamma: 3.3
+  N: 64
+  wave_dir: [0.5, 0.5]
+  directional_spread_deg: 25.0
+  water_depth: 30.0
+  x_eval: 0.0
+  y_eval: 0.0
+  z_eval: -2.0
+  scale: 0.5
+  max_current: 0.7
+  alpha_wave: 0.02
+  noise_std: 0.01
+  alpha_noise: 0.3
+  alpha_js: 0.0081
+  enable_wave_force: true
+  wave_force_gain: [35.0, 35.0, 50.0]
+  wave_force_application_point: [0.0, 0.0, 0.05]
+  max_wave_force: 25.0
+  max_wave_moment: 8.0
+  seed: 42

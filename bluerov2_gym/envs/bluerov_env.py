@@ -4,9 +4,32 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from bluerov2_gym.envs.core.config_utils import load_yaml
 from bluerov2_gym.envs.core.dynamics import Dynamics
 from bluerov2_gym.envs.core.rewards import Reward
 from bluerov2_gym.envs.core.visualization.renderer import BlueRovRenderer
+
+
+DEFAULT_ENV_CONFIG = {
+    "dt": 0.1,
+    "jonswap": None,
+    "reward": {},
+    "action_space": {
+        "low": -40.0,
+        "high": 40.0,
+        "shape": [6],
+    },
+    "termination": {
+        "max_abs_z": 20.0,
+        "max_abs_x": 30.0,
+        "max_abs_y": 30.0,
+        "max_abs_roll": 1.5,
+        "max_abs_pitch": 1.5,
+    },
+    "metadata": {
+        "render_fps": 30,
+    },
+}
 
 
 class BlueRov(gym.Env):
@@ -21,45 +44,45 @@ class BlueRov(gym.Env):
         super().__init__()
 
         self.render_mode = render_mode
-
+        if isinstance(env_config, (str, bytes)):
+            env_config = load_yaml(env_config)
+        if isinstance(dynamics_config, (str, bytes)):
+            dynamics_config = load_yaml(dynamics_config)
         cfg = env_config if env_config is not None else {}
 
-        self.dt = cfg.get("dt", 0.1)
+        self.dt = float(cfg.get("dt", 0.1))
         self.jonswap_params = cfg.get("jonswap", None)
+        self.termination_config = cfg.get("termination", {})
+
+        action_cfg = cfg.get("action_space", {})
+        self.action_low = float(action_cfg.get("low", -40.0))
+        self.action_high = float(action_cfg.get("high", 40.0))
+        action_shape = tuple(action_cfg.get("shape", [6]))
 
         with resources.path("bluerov2_gym.assets", "BlueRov2.dae") as asset_path:
             self.model_path = str(asset_path)
 
         self.renderer = BlueRovRenderer(render_mode=render_mode)
-        self.reward_fn = Reward()
+        self.reward_fn = Reward(config=cfg.get("reward", None))
 
-        # dynamics_config is kept in the signature for compatibility,
-        # but the current Dynamics class only accepts jonswap_params.
+        merged_dynamics_config = dict(dynamics_config or {})
+        merged_dynamics_config.setdefault("dt", self.dt)
+
         self.dynamics = Dynamics(
+            dynamics_config=merged_dynamics_config,
             jonswap_params=self.jonswap_params,
         )
 
         self.state_keys = [
-            "x",
-            "y",
-            "z",
-            "roll",
-            "pitch",
-            "yaw",
-            "u",
-            "v",
-            "w",
-            "p",
-            "q",
-            "r",
+            "x", "y", "z", "roll", "pitch", "yaw",
+            "u", "v", "w", "p", "q", "r",
         ]
-
         self.state = {key: 0.0 for key in self.state_keys}
 
         self.action_space = spaces.Box(
-            low=-40.0,
-            high=40.0,
-            shape=(6,),
+            low=self.action_low,
+            high=self.action_high,
+            shape=action_shape,
             dtype=np.float32,
         )
 
@@ -88,7 +111,6 @@ class BlueRov(gym.Env):
             self.state[key] = 0.0
 
         reset_jonswap_params = None
-
         if options is not None:
             reset_jonswap_params = options.get("jonswap_params", None)
 
@@ -99,47 +121,46 @@ class BlueRov(gym.Env):
             self.dynamics.reset()
 
         self.reward_fn.reset()
-
         return self._get_obs(), {}
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32).reshape(-1)
-        action = np.clip(action, -40.0, 40.0)
+        action = np.clip(action, self.action_low, self.action_high)
 
         self.dynamics.step(self.state, action)
 
         obs = self._get_obs()
         reward = self.reward_fn.get_reward(obs, action)
 
+        termination = self.termination_config
         terminated = False
 
-        if abs(self.state["z"]) > 20.0:
+        if abs(self.state["z"]) > float(termination.get("max_abs_z", 20.0)):
             terminated = True
 
-        if abs(self.state["x"]) > 30.0 or abs(self.state["y"]) > 30.0:
+        if (
+            abs(self.state["x"]) > float(termination.get("max_abs_x", 30.0))
+            or abs(self.state["y"]) > float(termination.get("max_abs_y", 30.0))
+        ):
             terminated = True
 
-        if abs(self.state["roll"]) > 1.5 or abs(self.state["pitch"]) > 1.5:
+        if (
+            abs(self.state["roll"]) > float(termination.get("max_abs_roll", 1.5))
+            or abs(self.state["pitch"]) > float(termination.get("max_abs_pitch", 1.5))
+        ):
             terminated = True
 
         truncated = False
 
-        pos_error = float(
-            np.sqrt(
-                self.state["x"] ** 2
-                + self.state["y"] ** 2
-                + self.state["z"] ** 2
-            )
-        )
-
-        yaw_error = float(
-            abs(
-                np.arctan2(
-                    np.sin(self.state["yaw"]),
-                    np.cos(self.state["yaw"]),
-                )
-            )
-        )
+        pos_error = float(np.sqrt(
+            self.state["x"] ** 2
+            + self.state["y"] ** 2
+            + self.state["z"] ** 2
+        ))
+        yaw_error = float(abs(np.arctan2(
+            np.sin(self.state["yaw"]),
+            np.cos(self.state["yaw"]),
+        )))
 
         info = {
             "x": float(self.state["x"]),
@@ -167,23 +188,11 @@ class BlueRov(gym.Env):
 
     def _append_dynamics_info(self, info: dict):
         vector_keys = [
-            "tau",
-            "tau_wave",
-            "tau_total",
-            "thrusters",
-            "nu_current",
-            "nu_wave_raw",
-            "nu_rel",
-            "nu_dot",
-            "coriolis_rb",
-            "coriolis_added",
-            "damping",
-            "restoring",
+            "tau", "tau_wave", "tau_total", "thrusters", "nu_current",
+            "nu_wave_raw", "nu_rel", "nu_dot", "coriolis_rb",
+            "coriolis_added", "damping", "restoring",
         ]
-
-        scalar_keys = [
-            "wave_elevation",
-        ]
+        scalar_keys = ["wave_elevation"]
 
         for key in vector_keys:
             if key in self.state:
@@ -194,32 +203,32 @@ class BlueRov(gym.Env):
                 info[key] = float(self.state[key])
 
         if "nu_current" in self.state:
-            nu_current = np.asarray(self.state["nu_current"], dtype=float)
-            info["metrics/current_velocity_norm"] = float(np.linalg.norm(nu_current))
+            value = np.asarray(self.state["nu_current"], dtype=float)
+            info["metrics/current_velocity_norm"] = float(np.linalg.norm(value))
 
         if "nu_wave_raw" in self.state:
-            nu_wave_raw = np.asarray(self.state["nu_wave_raw"], dtype=float)
-            info["metrics/raw_wave_velocity_norm"] = float(np.linalg.norm(nu_wave_raw))
+            value = np.asarray(self.state["nu_wave_raw"], dtype=float)
+            info["metrics/raw_wave_velocity_norm"] = float(np.linalg.norm(value))
 
         if "tau_wave" in self.state:
-            tau_wave = np.asarray(self.state["tau_wave"], dtype=float)
-            info["metrics/wave_force_norm"] = float(np.linalg.norm(tau_wave[0:3]))
-            info["metrics/wave_moment_norm"] = float(np.linalg.norm(tau_wave[3:6]))
+            value = np.asarray(self.state["tau_wave"], dtype=float)
+            info["metrics/wave_force_norm"] = float(np.linalg.norm(value[0:3]))
+            info["metrics/wave_moment_norm"] = float(np.linalg.norm(value[3:6]))
 
         if "tau" in self.state:
-            tau = np.asarray(self.state["tau"], dtype=float)
-            info["metrics/control_force_norm"] = float(np.linalg.norm(tau[0:3]))
-            info["metrics/control_moment_norm"] = float(np.linalg.norm(tau[3:6]))
+            value = np.asarray(self.state["tau"], dtype=float)
+            info["metrics/control_force_norm"] = float(np.linalg.norm(value[0:3]))
+            info["metrics/control_moment_norm"] = float(np.linalg.norm(value[3:6]))
 
         if "tau_total" in self.state:
-            tau_total = np.asarray(self.state["tau_total"], dtype=float)
-            info["metrics/total_force_norm"] = float(np.linalg.norm(tau_total[0:3]))
-            info["metrics/total_moment_norm"] = float(np.linalg.norm(tau_total[3:6]))
+            value = np.asarray(self.state["tau_total"], dtype=float)
+            info["metrics/total_force_norm"] = float(np.linalg.norm(value[0:3]))
+            info["metrics/total_moment_norm"] = float(np.linalg.norm(value[3:6]))
 
         if "thrusters" in self.state:
-            thrusters = np.asarray(self.state["thrusters"], dtype=float)
-            info["metrics/thruster_l2_norm"] = float(np.linalg.norm(thrusters))
-            info["metrics/thruster_abs_sum"] = float(np.sum(np.abs(thrusters)))
+            value = np.asarray(self.state["thrusters"], dtype=float)
+            info["metrics/thruster_l2_norm"] = float(np.linalg.norm(value))
+            info["metrics/thruster_abs_sum"] = float(np.sum(np.abs(value)))
 
     def render(self):
         if self.render_mode == "human":

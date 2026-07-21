@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import yaml
 from pathlib import Path
 
-with open("path_tracking_experiments/jonswap_config.yaml", "r") as f:
+with open("experiments/ocean_environment.yaml", "r") as f:
     config = yaml.safe_load(f)
     config_default = config.get("default_scenario")
 
