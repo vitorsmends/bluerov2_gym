@@ -1,0 +1,82 @@
+curriculum:
+  enabled: true
+  min_episodes_criterion: 15
+
+  levels:
+    - name: "Calm Sea (Head Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 1.25
+        Tp: 7.03
+        gamma: 1.5
+        N: 16
+        wave_dir: [1.0, 0.0]
+        directional_spread_deg: 10.0
+        water_depth: 30.0
+        x_eval: 0.0
+        y_eval: 0.0
+        z_eval: -2.0
+        scale: 0.25
+        max_current: 0.14
+        alpha_wave: 0.02
+        noise_std: 0.005
+        alpha_noise: 0.30
+        alpha_js: 0.0081
+        enable_wave_force: false
+        wave_force_gain: [35.0, 35.0, 50.0]
+        wave_force_application_point: [0.0, 0.0, 0.05]
+        max_wave_force: 25.0
+        max_wave_moment: 8.0
+        seed: 42
+
+    - name: "Moderate Sea (Quartering Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 2.50
+        Tp: 8.0
+        gamma: 3.3
+        N: 24
+        wave_dir: [0.707, 0.707]
+        directional_spread_deg: 15.0
+        water_depth: 30.0
+        x_eval: 0.0
+        y_eval: 0.0
+        z_eval: -2.0
+        scale: 0.50
+        max_current: 0.50
+        alpha_wave: 0.02
+        noise_std: 0.010
+        alpha_noise: 0.30
+        alpha_js: 0.0081
+        enable_wave_force: true
+        wave_force_gain: [35.0, 35.0, 50.0]
+        wave_force_application_point: [0.0, 0.0, 0.05]
+        max_wave_force: 25.0
+        max_wave_moment: 8.0
+        seed: 42
+
+    - name: "Severe Sea (Beam Waves)"
+      reward_threshold: 200.0
+      jonswap_params:
+        Hs: 4.50
+        Tp: 8.0
+        gamma: 3.3
+        N: 32
+        wave_dir: [0.0, 1.0]
+        directional_spread_deg: 20.0
+        water_depth: 30.0
+        x_eval: 0.0
+        y_eval: 0.0
+        z_eval: -2.0
+        scale: 0.80
+        max_current: 0.80
+        alpha_wave: 0.02
+        noise_std: 0.020
+        alpha_noise: 0.30
+        alpha_js: 0.0081
+        enable_wave_force: true
+        wave_force_gain: [35.0, 35.0, 50.0]
+        wave_force_application_point: [0.0, 0.0, 0.05]
+        max_wave_force: 25.0
+        max_wave_moment: 8.0
+        seed: 42
