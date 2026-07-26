@@ -1,3 +1,4 @@
+
 from importlib import resources
 
 import gymnasium as gym
@@ -8,6 +9,7 @@ from bluerov2_gym.envs.core.config_utils import load_yaml
 from bluerov2_gym.envs.core.dynamics import Dynamics
 from bluerov2_gym.envs.core.rewards import Reward
 from bluerov2_gym.envs.core.visualization.renderer import BlueRovRenderer
+from bluerov2_gym.envs.core.actuator_faults import FaultManager
 
 
 DEFAULT_ENV_CONFIG = {
@@ -35,19 +37,16 @@ DEFAULT_ENV_CONFIG = {
 class BlueRov(gym.Env):
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 30}
 
-    def __init__(
-        self,
-        render_mode=None,
-        env_config: dict | None = None,
-        dynamics_config: dict | None = None,
-    ):
+    def __init__(self, render_mode=None, env_config=None, dynamics_config=None):
         super().__init__()
 
         self.render_mode = render_mode
+
         if isinstance(env_config, (str, bytes)):
             env_config = load_yaml(env_config)
         if isinstance(dynamics_config, (str, bytes)):
             dynamics_config = load_yaml(dynamics_config)
+
         cfg = env_config if env_config is not None else {}
 
         self.dt = float(cfg.get("dt", 0.1))
@@ -65,19 +64,21 @@ class BlueRov(gym.Env):
         self.renderer = BlueRovRenderer(render_mode=render_mode)
         self.reward_fn = Reward(config=cfg.get("reward", None))
 
-        merged_dynamics_config = dict(dynamics_config or {})
-        merged_dynamics_config.setdefault("dt", self.dt)
+        merged = dict(dynamics_config or {})
+        merged.setdefault("dt", self.dt)
 
         self.dynamics = Dynamics(
-            dynamics_config=merged_dynamics_config,
+            dynamics_config=merged,
             jonswap_params=self.jonswap_params,
         )
 
+        self.fault_manager = None
+
         self.state_keys = [
-            "x", "y", "z", "roll", "pitch", "yaw",
-            "u", "v", "w", "p", "q", "r",
+            "x","y","z","roll","pitch","yaw",
+            "u","v","w","p","q","r"
         ]
-        self.state = {key: 0.0 for key in self.state_keys}
+        self.state = {k:0.0 for k in self.state_keys}
 
         self.action_space = spaces.Box(
             low=self.action_low,
@@ -86,98 +87,86 @@ class BlueRov(gym.Env):
             dtype=np.float32,
         )
 
-        self.observation_space = spaces.Dict(
-            {
-                key: spaces.Box(
-                    low=-np.inf,
-                    high=np.inf,
-                    shape=(1,),
-                    dtype=np.float32,
-                )
-                for key in self.state_keys
-            }
-        )
+        self.observation_space = spaces.Dict({
+            k: spaces.Box(low=-np.inf, high=np.inf, shape=(1,), dtype=np.float32)
+            for k in self.state_keys
+        })
+
+    def set_fault_manager(self, fault_manager: FaultManager | None):
+        self.fault_manager = fault_manager
+
+    def clear_fault_manager(self):
+        self.fault_manager = None
+
+    def _process_action(self, action):
+        action = np.asarray(action, dtype=np.float32).reshape(-1)
+        action = np.clip(action, self.action_low, self.action_high)
+
+        if self.fault_manager is not None:
+            action = self.fault_manager.apply(action)
+
+        return action
 
     def _get_obs(self):
-        return {
-            key: np.array([self.state[key]], dtype=np.float32)
-            for key in self.state_keys
-        }
+        return {k: np.array([self.state[k]], dtype=np.float32)
+                for k in self.state_keys}
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
 
-        for key in self.state_keys:
-            self.state[key] = 0.0
+        for k in self.state_keys:
+            self.state[k] = 0.0
 
-        reset_jonswap_params = None
-        if options is not None:
-            reset_jonswap_params = options.get("jonswap_params", None)
+        reset_jonswap = None if options is None else options.get("jonswap_params")
 
-        if reset_jonswap_params is not None:
-            self.jonswap_params = reset_jonswap_params.copy()
+        if reset_jonswap is not None:
+            self.jonswap_params = reset_jonswap.copy()
             self.dynamics.reset(jonswap_params=self.jonswap_params)
         else:
             self.dynamics.reset()
+
+        if self.fault_manager is not None:
+            self.fault_manager.reset()
 
         self.reward_fn.reset()
         return self._get_obs(), {}
 
     def step(self, action):
-        action = np.asarray(action, dtype=np.float32).reshape(-1)
-        action = np.clip(action, self.action_low, self.action_high)
+        action = self._process_action(action)
 
         self.dynamics.step(self.state, action)
 
         obs = self._get_obs()
         reward = self.reward_fn.get_reward(obs, action)
 
-        termination = self.termination_config
-        terminated = False
-
-        if abs(self.state["z"]) > float(termination.get("max_abs_z", 20.0)):
-            terminated = True
-
-        if (
-            abs(self.state["x"]) > float(termination.get("max_abs_x", 30.0))
-            or abs(self.state["y"]) > float(termination.get("max_abs_y", 30.0))
-        ):
-            terminated = True
-
-        if (
-            abs(self.state["roll"]) > float(termination.get("max_abs_roll", 1.5))
-            or abs(self.state["pitch"]) > float(termination.get("max_abs_pitch", 1.5))
-        ):
-            terminated = True
+        tcfg = self.termination_config
+        terminated = (
+            abs(self.state["z"]) > float(tcfg.get("max_abs_z",20.0))
+            or abs(self.state["x"]) > float(tcfg.get("max_abs_x",30.0))
+            or abs(self.state["y"]) > float(tcfg.get("max_abs_y",30.0))
+            or abs(self.state["roll"]) > float(tcfg.get("max_abs_roll",1.5))
+            or abs(self.state["pitch"]) > float(tcfg.get("max_abs_pitch",1.5))
+        )
 
         truncated = False
 
         pos_error = float(np.sqrt(
-            self.state["x"] ** 2
-            + self.state["y"] ** 2
-            + self.state["z"] ** 2
+            self.state["x"]**2 +
+            self.state["y"]**2 +
+            self.state["z"]**2
         ))
+
         yaw_error = float(abs(np.arctan2(
             np.sin(self.state["yaw"]),
-            np.cos(self.state["yaw"]),
+            np.cos(self.state["yaw"])
         )))
 
-        info = {
-            "x": float(self.state["x"]),
-            "y": float(self.state["y"]),
-            "z": float(self.state["z"]),
-            "roll": float(self.state["roll"]),
-            "pitch": float(self.state["pitch"]),
-            "yaw": float(self.state["yaw"]),
-            "u": float(self.state["u"]),
-            "v": float(self.state["v"]),
-            "w": float(self.state["w"]),
-            "p": float(self.state["p"]),
-            "q": float(self.state["q"]),
-            "r": float(self.state["r"]),
-            "metrics/position_error_euclidean": pos_error,
-            "metrics/yaw_error_rad": yaw_error,
-        }
+        info = {k: float(self.state[k]) for k in self.state_keys}
+        info["metrics/position_error_euclidean"] = pos_error
+        info["metrics/yaw_error_rad"] = yaw_error
+
+        if self.fault_manager is not None:
+            info["fault_manager"] = self.fault_manager.__class__.__name__
 
         self._append_dynamics_info(info)
 

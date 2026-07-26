@@ -1,0 +1,7 @@
+digraph "packages_bluerov2" {
+rankdir=BT
+charset="utf-8"
+"bluerov2_gym.bluerov2_gym" [color="black", label=<bluerov2_gym.bluerov2_gym>, shape="box", style="solid"];
+"bluerov2_gym.bluerov2_gym.envs" [color="black", label=<bluerov2_gym.bluerov2_gym.envs>, shape="box", style="solid"];
+"bluerov2_gym.bluerov2_gym.envs.bluerov_env" [color="black", label=<bluerov2_gym.bluerov2_gym.envs.bluerov_env>, shape="box", style="solid"];
+}

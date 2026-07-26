@@ -1,0 +1,41 @@
+digraph "packages_bluerov2" {
+rankdir=BT
+charset="utf-8"
+"bluerov2_gym.bluerov2_gym" [color="black", label=<bluerov2_gym.bluerov2_gym>, shape="box", style="solid"];
+"bluerov2_gym.bluerov2_gym.envs" [color="black", label=<bluerov2_gym.bluerov2_gym.envs>, shape="box", style="solid"];
+"bluerov2_gym.bluerov2_gym.envs.bluerov_env" [color="black", label=<bluerov2_gym.bluerov2_gym.envs.bluerov_env>, shape="box", style="solid"];
+"bluerov2_gym.experiments" [color="black", label=<bluerov2_gym.experiments>, shape="box", style="solid"];
+"bluerov2_gym.experiments.config_loader" [color="black", label=<bluerov2_gym.experiments.config_loader>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers" [color="black", label=<bluerov2_gym.experiments.controllers>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.base" [color="black", label=<bluerov2_gym.experiments.controllers.base>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.factory" [color="black", label=<bluerov2_gym.experiments.controllers.factory>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.nmpc" [color="black", label=<bluerov2_gym.experiments.controllers.nmpc>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.pid" [color="black", label=<bluerov2_gym.experiments.controllers.pid>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.ppo" [color="black", label=<bluerov2_gym.experiments.controllers.ppo>, shape="box", style="solid"];
+"bluerov2_gym.experiments.controllers.smc" [color="black", label=<bluerov2_gym.experiments.controllers.smc>, shape="box", style="solid"];
+"bluerov2_gym.experiments.env_utils" [color="black", label=<bluerov2_gym.experiments.env_utils>, shape="box", style="solid"];
+"bluerov2_gym.experiments.references" [color="black", label=<bluerov2_gym.experiments.references>, shape="box", style="solid"];
+"bluerov2_gym.experiments.run_experiment" [color="black", label=<bluerov2_gym.experiments.run_experiment>, shape="box", style="solid"];
+"bluerov2_gym.experiments.runner" [color="black", label=<bluerov2_gym.experiments.runner>, shape="box", style="solid"];
+"bluerov2_gym.experiments.trajectories" [color="black", label=<bluerov2_gym.experiments.trajectories>, shape="box", style="solid"];
+"bluerov2_gym.experiments" -> "bluerov2_gym.experiments.runner" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers" -> "bluerov2_gym.experiments.controllers.base" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers" -> "bluerov2_gym.experiments.controllers.nmpc" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers" -> "bluerov2_gym.experiments.controllers.pid" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers" -> "bluerov2_gym.experiments.controllers.ppo" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers" -> "bluerov2_gym.experiments.controllers.smc" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.factory" -> "bluerov2_gym.experiments.controllers.nmpc" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.factory" -> "bluerov2_gym.experiments.controllers.pid" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.factory" -> "bluerov2_gym.experiments.controllers.ppo" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.factory" -> "bluerov2_gym.experiments.controllers.smc" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.nmpc" -> "bluerov2_gym.experiments.controllers.base" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.pid" -> "bluerov2_gym.experiments.controllers.base" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.ppo" -> "bluerov2_gym.experiments.controllers.base" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.controllers.smc" -> "bluerov2_gym.experiments.controllers.base" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.runner" -> "bluerov2_gym.experiments.config_loader" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.runner" -> "bluerov2_gym.experiments.controllers.factory" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.runner" -> "bluerov2_gym.experiments.env_utils" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.runner" -> "bluerov2_gym.experiments.references" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.runner" -> "bluerov2_gym.experiments.trajectories" [arrowhead="open", arrowtail="none"];
+"bluerov2_gym.experiments.trajectories" -> "bluerov2_gym.experiments.env_utils" [arrowhead="open", arrowtail="none"];
+}

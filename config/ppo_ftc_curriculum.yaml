@@ -1,0 +1,255 @@
+environment:
+  id: BlueRov-v0
+  entry_point: bluerov2_gym.envs:BlueRov
+  max_episode_steps: 1000
+  render_mode: null
+
+  config:
+    dt: 0.1
+
+  dynamics_config: {}
+  dynamics_config_file: null
+
+pretrained:
+  # PPO policy obtained after the environmental JONSWAP curriculum.
+  # The .zip suffix is optional.
+  model_path: ../models/bluerov_ppo_curriculum
+
+  # VecNormalize saved together with the nominal PPO policy.
+  vecnormalize_path: ../models/bluerov_vecnormalize.pkl
+
+paths:
+  tensorboard_log: ../bluerov_tensorboard_ftc
+  model_dir: ../models_ftc
+  model_name: bluerov_ppo_ftc_severe
+  vecnormalize_name: bluerov_ftc_severe_vecnormalize.pkl
+
+training:
+  tb_log_name: PPO_FTC_Severe
+  device: auto
+  seed: 42
+  fault_log_every_episodes: 100
+
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_ftc_severe_checkpoint
+  save_vecnormalize: true
+
+vecnormalize_finetuning:
+  # true: update observation normalization statistics during fine-tuning.
+  # false: retain the statistics learned during nominal training.
+  update_statistics: true
+  norm_reward: true
+
+jonswap_defaults:
+  Hs: 0.0
+  Tp: 8.0
+  gamma: 3.3
+  N: 64
+  wave_dir: [1.0, 0.0]
+  max_current: 0.0
+  scale: 1.0
+  enable_wave_force: false
+  wave_force_gain: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  wave_force_application_point: [0.0, 0.0, 0.0]
+
+# This condition remains unchanged throughout the complete FTC curriculum.
+severe_jonswap:
+  Hs: 1.5
+  Tp: 8.0
+  gamma: 3.3
+  N: 64
+  wave_dir: [1.0, 0.0]
+  max_current: 0.40
+  scale: 1.0
+  enable_wave_force: true
+  wave_force_gain: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+  wave_force_application_point: [0.0, 0.0, 0.0]
+
+curriculum:
+  # Phase 1: brief nominal consolidation under the fixed severe condition.
+  - name: severe_nominal_warmup
+    timesteps: 100000
+    fault_stage:
+      activation_probability: 0.0
+      number_of_faults: 0
+      candidates: []
+
+  # Remaining effectiveness between 80% and 90%.
+  # Equivalent to a 10-20% loss of effectiveness.
+  - name: loe_light
+    timesteps: 200000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: loss_of_effectiveness
+          weight: 1.0
+          params:
+            effectiveness:
+              min: 0.80
+              max: 0.90
+
+  # Remaining effectiveness between 60% and 80%.
+  - name: loe_moderate
+    timesteps: 250000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: loss_of_effectiveness
+          weight: 1.0
+          params:
+            effectiveness:
+              min: 0.60
+              max: 0.80
+
+  # Remaining effectiveness between 30% and 60%.
+  - name: loe_severe
+    timesteps: 300000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: loss_of_effectiveness
+          weight: 1.0
+          params:
+            effectiveness:
+              min: 0.30
+              max: 0.60
+
+  - name: reduced_saturation
+    timesteps: 300000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: reduced_saturation
+          weight: 1.0
+          params:
+            limit:
+              min: 10.0
+              max: 25.0
+
+  - name: dead_time
+    timesteps: 300000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: dead_time
+          weight: 1.0
+          params:
+            delay_steps:
+              min: 1
+              max: 4
+
+  - name: stuck_thruster
+    timesteps: 350000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: stuck_thruster
+          weight: 1.0
+          params:
+            stuck_value:
+              min: -10.0
+              max: 10.0
+
+  - name: complete_outage
+    timesteps: 400000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: complete_outage
+          weight: 1.0
+          params: {}
+
+  # One fault type is selected at each episode.
+  - name: mixed_single_fault
+    timesteps: 500000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 1
+      allow_same_thruster: false
+      candidates:
+        - type: loss_of_effectiveness
+          weight: 0.30
+          params:
+            effectiveness:
+              min: 0.30
+              max: 0.90
+
+        - type: reduced_saturation
+          weight: 0.20
+          params:
+            limit:
+              min: 10.0
+              max: 25.0
+
+        - type: dead_time
+          weight: 0.20
+          params:
+            delay_steps:
+              min: 1
+              max: 4
+
+        - type: stuck_thruster
+          weight: 0.10
+          params:
+            stuck_value:
+              min: -10.0
+              max: 10.0
+
+        - type: complete_outage
+          weight: 0.20
+          params: {}
+
+  # Final phase: two different thrusters are affected in each episode.
+  - name: mixed_double_fault
+    timesteps: 600000
+    fault_stage:
+      activation_probability: 1.0
+      number_of_faults: 2
+      allow_same_thruster: false
+      candidates:
+        - type: loss_of_effectiveness
+          weight: 0.35
+          params:
+            effectiveness:
+              min: 0.30
+              max: 0.90
+
+        - type: reduced_saturation
+          weight: 0.20
+          params:
+            limit:
+              min: 10.0
+              max: 25.0
+
+        - type: dead_time
+          weight: 0.20
+          params:
+            delay_steps:
+              min: 1
+              max: 4
+
+        - type: stuck_thruster
+          weight: 0.10
+          params:
+            stuck_value:
+              min: -10.0
+              max: 10.0
+
+        - type: complete_outage
+          weight: 0.15
+          params: {}

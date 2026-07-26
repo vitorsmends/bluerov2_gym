@@ -3,28 +3,10 @@ environment:
   entry_point: bluerov2_gym.envs:BlueRov
   max_episode_steps: 1000
   render_mode: null
+
   config:
     dt: 0.1
-    action_space:
-      low: -40.0
-      high: 40.0
-      shape: [6]
-    termination:
-      max_abs_z: 20.0
-      max_abs_x: 30.0
-      max_abs_y: 30.0
-      max_abs_roll: 1.5
-      max_abs_pitch: 1.5
-    reward:
-      weights:
-        position: 1.0
-        velocity: 0.1
-        yaw: 0.5
-        stability: 0.5
-      success:
-        radius: 0.20
-        bonus: 1.0
-  dynamics_config_file: dynamics_config.yaml
+
   dynamics_config: {}
 
 paths:
@@ -48,7 +30,7 @@ checkpoint:
 ppo:
   policy: MultiInputPolicy
   verbose: 1
-  learning_rate: 0.0003
+  learning_rate: 3e-4
   n_steps: 4096
   batch_size: 256
   n_epochs: 10
