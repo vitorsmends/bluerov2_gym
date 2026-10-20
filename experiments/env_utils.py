@@ -18,15 +18,12 @@ if str(PROJECT_ROOT) not in sys.path:
 
 ENV_ID = "BlueRov-v0"
 
-try:
+if ENV_ID not in gym.envs.registry:
     register(
         id=ENV_ID,
         entry_point="bluerov2_gym.envs.bluerov_env:BlueRov",
         max_episode_steps=5000,
     )
-except gym.error.Error:
-    # The environment may already be registered by the package.
-    pass
 
 
 def make_env(render_mode=None, jonswap_params=None):

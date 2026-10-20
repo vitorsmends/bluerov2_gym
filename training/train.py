@@ -20,6 +20,7 @@ MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo")
 VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize.pkl")
 
 TOTAL_TIMESTEPS = 1_000_000
+SEED = 42
 
 
 if ENV_ID not in gym.envs.registry:
@@ -101,7 +102,7 @@ def build_jonswap_params(
     wave_force_application_point=(0.0, 0.0, 0.05),
     max_wave_force=25.0,
     max_wave_moment=8.0,
-    seed=42,
+    seed=SEED,
 ):
     return {
         "Hs": float(Hs),
@@ -205,6 +206,7 @@ def train_model():
         ent_coef=0.01,
         vf_coef=0.5,
         max_grad_norm=0.5,
+        seed=SEED,
         policy_kwargs=dict(
             net_arch=dict(
                 pi=[256, 256],

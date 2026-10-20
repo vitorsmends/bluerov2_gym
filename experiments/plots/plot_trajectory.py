@@ -1,3 +1,4 @@
+import argparse
 import os
 import numpy as np
 import pandas as pd
@@ -6,25 +7,19 @@ import matplotlib.pyplot as plt
 import yaml
 from pathlib import Path
 
-with open("experiments/ocean_environment.yaml", "r") as f:
-    config = yaml.safe_load(f)
-    config_default = config.get("default_scenario")
-
-INPUT_DIR = Path(f"results-{config_default}/trajectory_experiments")
-OUTPUT_DIR = Path(f"results-{config_default}/plots_trajectory_experiments")
-TABLE_DIR = Path(f"results-{config_default}/tables_trajectory_experiments")
-
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-TABLE_DIR.mkdir(parents=True, exist_ok=True)
+INPUT_DIR = Path()
+OUTPUT_DIR = Path()
+TABLE_DIR = Path()
 
 
 CONFIG = {
-    # "PID":  {"key": "pid",  "color": "#4E79A7", "ls": "-"},
-    # "SMC":  {"key": "smc",  "color": "#B07AA1", "ls": "-"},
+    "PID":  {"key": "pid",  "color": "#4E79A7", "ls": "-"},
+    "SMC":  {"key": "smc",  "color": "#B07AA1", "ls": "-"},
     "NMPC": {"key": "nmpc", "color": "#E15759", "ls": "-"},
     "PPO":  {"key": "ppo",  "color": "#59A14F", "ls": "-"},
 }
 
+THREE_D_CONTROLLERS = {"NMPC", "PPO"}
 
 TRAJECTORIES = {
     "square": "Square",
@@ -35,13 +30,15 @@ TRAJECTORIES = {
 }
 
 
-def save_plot(name):
-    plt.savefig(OUTPUT_DIR / f"{name}.pdf", dpi=300, bbox_inches="tight")
-    plt.savefig(OUTPUT_DIR / f"{name}.png", dpi=300, bbox_inches="tight")
+def save_plot(name, output_dir=None):
+    output_dir = Path(output_dir) if output_dir is not None else OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_dir / f"{name}.pdf", dpi=300, bbox_inches="tight")
+    plt.savefig(output_dir / f"{name}.png", dpi=300, bbox_inches="tight")
     print(f"[OK] Saved {name}")
 
 
-def load_results():
+def load_results(repetition_id=0):
     data = {}
 
     required_cols = {
@@ -74,6 +71,16 @@ def load_results():
                 print(f"[WARN] {ctrl_name}/{traj_key} skipped. Missing: {sorted(missing)}")
                 continue
 
+            if "repetition_id" not in df.columns:
+                df["repetition_id"] = 0
+            df = df[df["repetition_id"] == repetition_id]
+            if df.empty:
+                print(
+                    f"[WARN] {ctrl_name}/{traj_key} has no repetition "
+                    f"{repetition_id}."
+                )
+                continue
+
             df = df.sort_values("time").reset_index(drop=True)
             data[traj_key][ctrl_name] = df
 
@@ -92,6 +99,7 @@ def build_summary(data):
                 "trajectory": traj_key,
                 "trajectory_label": TRAJECTORIES[traj_key],
                 "controller": ctrl_name,
+                "repetition_id": int(df["repetition_id"].iloc[0]),
                 "n_steps": len(df),
                 "duration_s": float(df["time"].max() - df["time"].min()),
                 "mean_error_m": float(np.mean(err)),
@@ -119,7 +127,12 @@ def get_reference_df(ctrl_data):
     return first_df
 
 
-def plot_xy_for_trajectory(traj_key, ctrl_data):
+def plot_xy_for_trajectory(
+    traj_key,
+    ctrl_data,
+    filename=None,
+    output_dir=None,
+):
     if not ctrl_data:
         return
 
@@ -152,7 +165,7 @@ def plot_xy_for_trajectory(traj_key, ctrl_data):
     plt.legend(frameon=True)
     plt.tight_layout()
 
-    save_plot(f"xy_{traj_key}")
+    save_plot(filename or f"xy_{traj_key}", output_dir=output_dir)
 
 
 def plot_3d_for_trajectory(traj_key, ctrl_data):
@@ -171,6 +184,8 @@ def plot_3d_for_trajectory(traj_key, ctrl_data):
     )
 
     for ctrl_name, df in ctrl_data.items():
+        if ctrl_name not in THREE_D_CONTROLLERS:
+            continue
         cfg = CONFIG[ctrl_name]
 
         ax.plot(
@@ -349,13 +364,51 @@ def plot_all_trajectories_xy_reference(data):
     save_plot("all_reference_trajectories_xy")
 
 
-def main():
+def build_parser():
+    parser = argparse.ArgumentParser(
+        description="Generate spatial path-tracking figures from benchmark CSVs."
+    )
+    parser.add_argument(
+        "--scenario",
+        choices=("moderate", "severe"),
+        help="Sea-state result set. Defaults to ocean_environment.yaml.",
+    )
+    parser.add_argument(
+        "--repetition-id",
+        type=int,
+        default=0,
+        help="Repetition to show in representative trajectory figures.",
+    )
+    parser.add_argument(
+        "--representative-trajectory",
+        choices=tuple(TRAJECTORIES),
+        default="figure_eight_depth",
+        help="Trajectory used for the article's representative XY plot.",
+    )
+    return parser
+
+
+def main(argv=None):
+    global INPUT_DIR, OUTPUT_DIR, TABLE_DIR
+
+    args = build_parser().parse_args(argv)
+    with open("experiments/ocean_environment.yaml", "r", encoding="utf-8") as stream:
+        ocean_config = yaml.safe_load(stream)
+    scenario = args.scenario or ocean_config.get("default_scenario", "moderate")
+    INPUT_DIR = Path(f"results-{scenario}/trajectory_experiments")
+    OUTPUT_DIR = Path(
+        f"oceans2026/figs/results-{scenario}/plots_trajectory_experiments"
+    )
+    TABLE_DIR = Path(f"results-{scenario}/tables_trajectory_experiments")
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    TABLE_DIR.mkdir(parents=True, exist_ok=True)
+
     plt.rcParams.update({
         "font.size": 12,
         "font.family": "serif",
     })
 
-    data = load_results()
+    data = load_results(repetition_id=args.repetition_id)
 
     if not any(data[traj] for traj in data):
         print("[ERROR] No valid trajectory experiment CSV files found.")
@@ -368,10 +421,17 @@ def main():
     for traj_key, ctrl_data in data.items():
         plot_xy_for_trajectory(traj_key, ctrl_data)
         plot_3d_for_trajectory(traj_key, ctrl_data)
-        # plot_error_for_trajectory(traj_key, ctrl_data)
-        # plot_depth_for_trajectory(traj_key, ctrl_data)
-        # plot_yaw_for_trajectory(traj_key, ctrl_data)
-        # plot_control_effort_for_trajectory(traj_key, ctrl_data)
+
+    representative = data[args.representative_trajectory]
+    if representative:
+        plot_xy_for_trajectory(
+            args.representative_trajectory,
+            representative,
+            filename="path_tracking_xy_first_repetition",
+            output_dir=Path(
+                f"oceans2026/figs/results-{scenario}/plots_path_tracking"
+            ),
+        )
 
     print("[OK] All individual trajectory plots generated.")
 

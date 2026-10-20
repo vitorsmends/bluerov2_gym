@@ -1,7 +1,8 @@
-from gymnasium.envs.registration import register
+from gymnasium.envs.registration import register, registry
 
-register(
-    id="BlueRov-v0",
-    entry_point="bluerov2_gym.envs:BlueRov",  # Note the updated entry_point
-    max_episode_steps=5000,
-)
+if "BlueRov-v0" not in registry:
+    register(
+        id="BlueRov-v0",
+        entry_point="bluerov2_gym.envs:BlueRov",
+        max_episode_steps=5000,
+    )

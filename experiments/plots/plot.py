@@ -378,7 +378,7 @@ def plot_boxplot_metric(rep_df, metric, ylabel, filename):
 
     bp = plt.boxplot(
         data,
-        labels=labels,
+        tick_labels=labels,
         patch_artist=True,
         showmeans=True,
     )

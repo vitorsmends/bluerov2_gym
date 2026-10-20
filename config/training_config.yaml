@@ -65,6 +65,7 @@ ppo:
 
 training:
   tb_log_name: PPO_BlueROV2_Curriculum
+  seed: 42
 
 jonswap_defaults:
   directional_spread_deg: 25.0

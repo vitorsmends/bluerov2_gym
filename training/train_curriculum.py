@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import argparse
 import os
+import platform
+from copy import deepcopy
 from pathlib import Path
 
 import gymnasium as gym
+import numpy as np
+import scipy
+import torch
+import yaml
 
 from gymnasium.envs.registration import register
 
@@ -12,6 +18,8 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback, CallbackList, CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+from gymnasium import __version__ as gymnasium_version
+from stable_baselines3 import __version__ as stable_baselines3_version
 
 from tqdm.auto import tqdm
 
@@ -68,6 +76,7 @@ DEFAULT_CONFIG = {
     },
     "training": {
         "tb_log_name": "PPO_BlueROV2_Curriculum",
+        "seed": 42,
     },
     "jonswap_defaults": {
         "directional_spread_deg": 25.0,
@@ -239,8 +248,71 @@ def load_training_config(config_path=None):
     return deep_merge(DEFAULT_CONFIG, load_yaml(config_path))
 
 
-def train_model_with_curriculum(config_path=None):
+ABLATIONS = (
+    "position_only",
+    "no_velocity_penalty",
+    "no_yaw_penalty",
+    "no_stability_penalty",
+    "no_success_bonus",
+    "no_curriculum",
+    "no_direct_wave_force",
+    "no_current",
+    "no_noise",
+    "learning_rate_1e-4",
+    "learning_rate_6e-4",
+)
+
+
+def apply_ablation(config, ablation):
+    if ablation is None:
+        return
+    config.setdefault("experiment", {})["ablation"] = ablation
+    if ablation == "position_only":
+        config["environment"]["config"]["reward"]["weights"].update({
+            "velocity": 0.0,
+            "yaw": 0.0,
+            "stability": 0.0,
+        })
+    elif ablation == "no_velocity_penalty":
+        config["environment"]["config"]["reward"]["weights"]["velocity"] = 0.0
+    elif ablation == "no_yaw_penalty":
+        config["environment"]["config"]["reward"]["weights"]["yaw"] = 0.0
+    elif ablation == "no_stability_penalty":
+        config["environment"]["config"]["reward"]["weights"]["stability"] = 0.0
+    elif ablation == "no_success_bonus":
+        config["environment"]["config"]["reward"]["success"]["bonus"] = 0.0
+    elif ablation == "no_curriculum":
+        final_stage = deepcopy(config["curriculum"][-1])
+        final_stage["name"] = "Final sea state from start"
+        final_stage["timesteps"] = sum(stage["timesteps"] for stage in config["curriculum"])
+        config["curriculum"] = [final_stage]
+    elif ablation == "no_direct_wave_force":
+        for stage in config["curriculum"]:
+            stage["jonswap"]["enable_wave_force"] = False
+    elif ablation == "no_current":
+        for stage in config["curriculum"]:
+            stage["jonswap"]["max_current"] = 0.0
+    elif ablation == "no_noise":
+        for stage in config["curriculum"]:
+            stage["jonswap"]["noise_std"] = 0.0
+    elif ablation == "learning_rate_1e-4":
+        config["ppo"]["learning_rate"] = 1e-4
+    elif ablation == "learning_rate_6e-4":
+        config["ppo"]["learning_rate"] = 6e-4
+    else:
+        raise ValueError(f"Unknown ablation: {ablation}")
+
+
+def train_model_with_curriculum(config_path=None, seed=None, separate_run=False, ablation=None):
     config = load_training_config(config_path)
+    apply_ablation(config, ablation)
+
+    training_cfg = config["training"]
+    run_seed = int(training_cfg.get("seed", 42) if seed is None else seed)
+    if run_seed < 0:
+        raise ValueError("Training seeds must be non-negative integers.")
+    training_cfg["seed"] = run_seed
+    config["jonswap_defaults"]["seed"] = run_seed
 
     dynamics_config = config["environment"].get("dynamics_config", {})
     dynamics_config_file = config["environment"].get("dynamics_config_file")
@@ -262,10 +334,56 @@ def train_model_with_curriculum(config_path=None):
 
     log_dir = Path(paths["tensorboard_log"])
     model_dir = Path(paths["model_dir"])
-    model_path = model_dir / paths["model_name"]
-    vecnorm_path = model_dir / paths["vecnormalize_name"]
+    run_suffix = ""
+    if separate_run or ablation:
+        run_suffix = f"_ablation_{ablation}" if ablation else ""
+        run_suffix += f"_seed_{run_seed}"
+    model_path = model_dir / f"{paths['model_name']}{run_suffix}"
+    vecnorm_name = paths["vecnormalize_name"]
+    vecnorm_path = model_dir / (
+        f"{vecnorm_name.removesuffix('.pkl')}{run_suffix}.pkl"
+    )
+    run_name = f"{training_cfg['tb_log_name']}{run_suffix}"
+    manifest_path = model_dir / f"{model_path.name}_config.yaml"
+    if separate_run or ablation:
+        existing_logs = [
+            path for path in log_dir.glob(f"{run_name}*")
+            if path.is_dir() and list(path.glob("events.out.tfevents.*"))
+        ]
+        checkpoint_glob = (
+            f"{config['checkpoint']['name_prefix']}{run_suffix}_*_steps.zip"
+        )
+        existing_outputs = [
+            path for path in (
+                Path(f"{model_path}.zip"),
+                vecnorm_path,
+                manifest_path,
+                *model_dir.glob(checkpoint_glob),
+            )
+            if path.exists()
+            and not (path == manifest_path and path.stat().st_size == 0)
+        ]
+        if existing_logs or existing_outputs:
+            raise FileExistsError(
+                f"Outputs already exist for training run '{run_name}'. "
+                "Use a new seed or archive the existing run before retrying."
+            )
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
+    manifest = {
+        "python_version": str(platform.python_version()),
+        "numpy_version": str(np.__version__),
+        "scipy_version": str(scipy.__version__),
+        "torch_version": str(torch.__version__),
+        "gymnasium_version": str(gymnasium_version),
+        "stable_baselines3_version": str(stable_baselines3_version),
+        "seed": run_seed,
+        "config": config,
+    }
+    temporary_manifest_path = manifest_path.with_suffix(f"{manifest_path.suffix}.tmp")
+    with temporary_manifest_path.open("w", encoding="utf-8") as stream:
+        yaml.safe_dump(manifest, stream, sort_keys=False)
+    os.replace(temporary_manifest_path, manifest_path)
 
     initial_jonswap = build_jonswap_params(config["jonswap_defaults"], config["initial_jonswap"])
     env_config = deep_merge(env_section.get("config", {}), {"jonswap": initial_jonswap})
@@ -284,7 +402,7 @@ def train_model_with_curriculum(config_path=None):
     checkpoint_callback = CheckpointCallback(
         save_freq=int(checkpoint_cfg["save_freq"]),
         save_path=str(model_dir),
-        name_prefix=checkpoint_cfg["name_prefix"],
+        name_prefix=f"{checkpoint_cfg['name_prefix']}{run_suffix}",
         save_vecnormalize=bool(checkpoint_cfg["save_vecnormalize"]),
     )
 
@@ -296,6 +414,7 @@ def train_model_with_curriculum(config_path=None):
         env=env,
         verbose=verbose,
         tensorboard_log=str(log_dir),
+        seed=run_seed,
         **ppo_cfg,
     )
 
@@ -309,6 +428,7 @@ def train_model_with_curriculum(config_path=None):
 
     total_curriculum_timesteps = sum(lesson["timesteps"] for lesson in lessons)
     print("Iniciando treinamento estruturado por currículo...")
+    print(f"Semente de treinamento: {run_seed}")
     print(f"Total de timesteps planejado: {total_curriculum_timesteps:,}")
 
     is_first_iteration = True
@@ -337,7 +457,7 @@ def train_model_with_curriculum(config_path=None):
         model.learn(
             total_timesteps=lesson["timesteps"],
             callback=callback,
-            tb_log_name=config["training"]["tb_log_name"],
+            tb_log_name=run_name,
             reset_num_timesteps=is_first_iteration,
         )
         is_first_iteration = False
@@ -353,9 +473,33 @@ def train_model_with_curriculum(config_path=None):
 def parse_args():
     parser = argparse.ArgumentParser(description="Train PPO with a configurable curriculum.")
     parser.add_argument("--config", type=str, default=None, help="Optional YAML configuration file.")
+    parser.add_argument(
+        "--seeds",
+        type=int,
+        nargs="+",
+        help="Run an independent training for each seed, saving separate logs and models.",
+    )
+    parser.add_argument(
+        "--ablation",
+        choices=ABLATIONS,
+        help="Apply a predefined one-factor ablation while preserving the configured timestep budget.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    train_model_with_curriculum(config_path=args.config)
+    if args.seeds:
+        if any(seed < 0 for seed in args.seeds):
+            raise ValueError("--seeds values must be non-negative integers.")
+        if len(set(args.seeds)) != len(args.seeds):
+            raise ValueError("--seeds must contain unique seed values.")
+        for run_seed in args.seeds:
+            train_model_with_curriculum(
+                config_path=args.config,
+                seed=run_seed,
+                separate_run=True,
+                ablation=args.ablation,
+            )
+    else:
+        train_model_with_curriculum(config_path=args.config, ablation=args.ablation)

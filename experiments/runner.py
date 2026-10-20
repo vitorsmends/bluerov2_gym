@@ -34,13 +34,43 @@ STATIONKEEPING_HEADER = [
 ]
 
 TRAJECTORY_HEADER = [
-    "trajectory", "controller", "time",
-    "x", "y", "z", "roll", "pitch", "yaw", "u", "v", "w", "p", "q", "r",
-    "x_ref", "y_ref", "z_ref", "roll_ref", "pitch_ref", "yaw_ref",
-    "u_ref", "v_ref", "w_ref", "p_ref", "q_ref", "r_ref",
-    "tracking_error_m", "velocity_error", "yaw_error", "reward",
+    "sea_scenario",
+    "repetition_id",
+    "seed",
+    "Hs",
+    "Tp",
+    "gamma",
+    "wave_dir_x",
+    "wave_dir_y",
+    "scale",
+    "max_current",
+    "noise_std",
+    "trajectory",
+    "controller",
+    "time",
+
+    "x", "y", "z",
+    "roll", "pitch", "yaw",
+    "u", "v", "w",
+    "p", "q", "r",
+
+    "x_ref", "y_ref", "z_ref",
+    "roll_ref", "pitch_ref", "yaw_ref",
+
+    "u_ref", "v_ref", "w_ref",
+    "p_ref", "q_ref", "r_ref",
+
+    "tracking_error_m",
+    "velocity_error",
+    "yaw_error",
+    "reward",
+
     "T1", "T2", "T3", "T4", "T5", "T6",
-    "control_effort", "control_effort_normalized",
+
+    "control_effort",
+    "control_effort_normalized",
+
+    "controller_cpu_time_s",
 ]
 
 
@@ -172,45 +202,137 @@ class ExperimentRunner:
         exp = cfg["experiment"]
         dt = float(exp.get("dt", 0.1))
         steps = int(exp.get("steps", 1000))
+        repetitions = int(exp.get("repetitions", 1))
+        seed_base = int(exp.get("seed", 42))
         thrust_limit = float(exp.get("thrust_limit", 40.0))
-        output_dir = Path(cfg["output"]["directory"])
-        output_dir.mkdir(parents=True, exist_ok=True)
-        scenario_name = cfg["disturbance"].get("default_scenario")
-        jonswap = cfg["disturbance"]["scenarios"].get(scenario_name) if scenario_name else None
+        disturbance_cfg = cfg["disturbance"]
+        available_scenarios = disturbance_cfg.get("scenarios", {})
+        scenario_names = disturbance_cfg.get("scenario_names")
+        if scenario_names is None:
+            default_scenario = disturbance_cfg.get("default_scenario")
+            scenario_names = [default_scenario] if default_scenario else list(available_scenarios)
+        if not scenario_names:
+            raise ValueError("At least one disturbance scenario must be selected.")
+
+        output_template = cfg["output"].get("directory_template")
+        output_directory = cfg["output"].get("directory")
+        if not output_template and not output_directory:
+            raise ValueError("Output configuration needs directory or directory_template.")
+
+        missing_scenarios = set(scenario_names) - set(available_scenarios)
+        if missing_scenarios:
+            raise ValueError(
+                "Unknown disturbance scenario(s): "
+                + ", ".join(sorted(missing_scenarios))
+            )
 
         trajectories = [create_trajectory(item["name"], item.get("params")) for item in cfg["trajectories"] if item.get("enabled", True)]
-        for controller_cfg in cfg["controllers"]:
-            if not controller_cfg.get("enabled", True):
-                continue
-            name = controller_cfg["name"].lower()
-            for trajectory in trajectories:
-                env = make_env(render_mode=exp.get("render_mode"))
-                if jonswap is not None:
-                    env.unwrapped.dynamics.reset(jonswap_params=jonswap)
-                controller = ControllerFactory.create(
-                    name, dynamics=env.unwrapped.dynamics,
-                    reference_provider=trajectory, dt=dt, config=controller_cfg,
-                )
-                obs = _reset_with_jonswap(env, jonswap)
-                controller.reset()
-                rows = []
-                for k in range(steps):
-                    t = k * dt
-                    state = obs_to_state(obs)
-                    reference = trajectory.get_reference(t)
-                    errors = tracking_errors(state, reference)
-                    action = np.asarray(controller.get_action(obs=obs, state=state, reference=reference, t=t), dtype=np.float32).reshape(-1)
-                    action = np.clip(action, -thrust_limit, thrust_limit)
-                    obs, reward, terminated, truncated, _ = env.step(action)
-                    rows.append([
-                        trajectory.name, name, t, *state.tolist(), *reference.tolist(),
-                        errors["tracking_error_m"], errors["velocity_error"], errors["yaw_error"], reward,
-                        *action.tolist(), float(np.sum(action**2)), float(np.mean((action / thrust_limit)**2)),
-                    ])
-                    if terminated or truncated:
-                        break
-                output = output_dir / f"{name}_{trajectory.name}.csv"
-                with output.open("w", newline="") as stream:
-                    writer = csv.writer(stream); writer.writerow(TRAJECTORY_HEADER); writer.writerows(rows)
-                env.close()
-                print(f"[OK] Saved: {output}")
+        controller_configs = [
+            item for item in cfg["controllers"] if item.get("enabled", True)
+        ]
+        if repetitions < 1:
+            raise ValueError("experiment.repetitions must be at least 1.")
+        if not trajectories or not controller_configs:
+            raise ValueError("At least one trajectory and one controller must be enabled.")
+
+        run_count = (
+            len(scenario_names)
+            * len(controller_configs)
+            * len(trajectories)
+            * repetitions
+        )
+        print(
+            f"Trajectory campaign: {len(scenario_names)} sea states x "
+            f"{len(controller_configs)} controllers x {len(trajectories)} "
+            f"trajectories x {repetitions} repetitions = {run_count} runs."
+        )
+
+        for scenario_name in scenario_names:
+            jonswap = dict(available_scenarios[scenario_name])
+            if "wave_dir" in jonswap:
+                jonswap["wave_dir"] = tuple(jonswap["wave_dir"])
+
+            if output_template:
+                output_dir = Path(output_template.format(scenario=scenario_name))
+            else:
+                output_dir = Path(output_directory)
+                if len(scenario_names) > 1:
+                    output_dir = output_dir.parent / f"results-{scenario_name}" / output_dir.name
+            output_dir.mkdir(parents=True, exist_ok=True)
+
+            for controller_cfg in controller_configs:
+                name = controller_cfg["name"].lower()
+
+                for trajectory in trajectories:
+                    env = make_env(render_mode=exp.get("render_mode"))
+                    try:
+                        controller = ControllerFactory.create(
+                            name, dynamics=env.unwrapped.dynamics,
+                            reference_provider=trajectory, dt=dt, config=controller_cfg,
+                        )
+                        rows = []
+                        for repetition_id in range(repetitions):
+                            seed = seed_base + repetition_id
+                            obs = _reset_with_jonswap(env, jonswap, seed)
+                            controller.reset()
+
+                            for k in range(steps):
+                                t = k * dt
+                                state = obs_to_state(obs)
+                                reference = trajectory.get_reference(t)
+                                errors = tracking_errors(state, reference)
+                                cpu_start = time.process_time()
+                                action = np.asarray(
+                                    controller.get_action(
+                                        obs=obs,
+                                        state=state,
+                                        reference=reference,
+                                        t=t,
+                                    ),
+                                    dtype=np.float32,
+                                ).reshape(-1)
+                                controller_cpu_time = time.process_time() - cpu_start
+                                action = np.clip(action, -thrust_limit, thrust_limit)
+                                obs, reward, terminated, truncated, _ = env.step(action)
+                                wave_dir = jonswap.get("wave_dir", (np.nan, np.nan))
+                                rows.append([
+                                    scenario_name,
+                                    repetition_id,
+                                    seed,
+                                    jonswap.get("Hs", np.nan),
+                                    jonswap.get("Tp", np.nan),
+                                    jonswap.get("gamma", np.nan),
+                                    wave_dir[0],
+                                    wave_dir[1],
+                                    jonswap.get("scale", np.nan),
+                                    jonswap.get("max_current", np.nan),
+                                    jonswap.get("noise_std", np.nan),
+                                    trajectory.name,
+                                    name,
+                                    t,
+                                    *state.tolist(),
+                                    *reference.tolist(),
+                                    errors["tracking_error_m"],
+                                    errors["velocity_error"],
+                                    errors["yaw_error"],
+                                    reward,
+                                    *action.tolist(),
+                                    float(np.sum(action**2)),
+                                    float(np.mean((action / thrust_limit)**2)),
+                                    controller_cpu_time,
+                                ])
+                                if terminated or truncated:
+                                    break
+
+                        output = output_dir / f"{name}_{trajectory.name}.csv"
+                        with output.open("w", newline="") as stream:
+                            writer = csv.writer(stream)
+                            writer.writerow(TRAJECTORY_HEADER)
+                            writer.writerows(rows)
+                        print(
+                            f"[OK] Saved: {output} | "
+                            f"repetitions={repetitions} | "
+                            f"rows={len(rows)}"
+                        )
+                    finally:
+                        env.close()

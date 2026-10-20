@@ -7,7 +7,7 @@ experiment:
   render_mode: null
 
 output:
-  directory: results-moderate/trajectory_experiments
+  directory: results-severe/trajectory_experiments
 
 controllers:
   - name: pid
@@ -34,7 +34,7 @@ controllers:
 
 disturbance:
   config_path: experiments/ocean_environment.yaml
-  default_scenario: moderate
+  default_scenario: severe
 
 trajectories:
   - name: square

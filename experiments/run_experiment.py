@@ -34,7 +34,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> None:
     args = build_parser().parse_args()
-    config = load_config(args.config)
+    config_path = args.config.expanduser().resolve()
+    config = load_config(config_path)
+    disturbance_config = config.get("disturbance", {})
+    external_config = disturbance_config.get("config_path")
+    if external_config:
+        external_path = Path(external_config).expanduser()
+        if not external_path.is_absolute():
+            config_relative_path = config_path.parent / external_path
+            if config_relative_path.exists():
+                disturbance_config["config_path"] = str(config_relative_path)
     ExperimentRunner(config).run()
 
 

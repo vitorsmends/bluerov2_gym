@@ -1,0 +1,44 @@
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 5
+  seed: 42
+  thrust_limit: 40.0
+  render_mode: null
+
+output:
+  directory_template: results-{scenario}/trajectory_experiments
+
+controllers:
+  - name: pid
+    enabled: true
+    params: {}
+  - name: smc
+    enabled: true
+    params: {}
+  - name: nmpc
+    enabled: true
+    params:
+      horizon: 10
+      control_blocks: 5
+  - name: ppo
+    enabled: true
+    params:
+      model_path: bluerov_ppo_curriculum
+      vecnormalize_path: bluerov_vec_normalize_curriculum.pkl
+      env_config_path: config/blue_rov_config.yaml
+      dynamics_config_path: config/dynamics_config.yaml
+
+disturbance:
+  config_path: ../ocean_environment.yaml
+  scenario_names:
+    - moderate
+    - severe
+
+trajectories:
+  - name: circle
+  - name: square
+  - name: figure_eight_depth
+  - name: letter_b
+  - name: star
