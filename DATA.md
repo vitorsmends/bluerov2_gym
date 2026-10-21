@@ -32,6 +32,11 @@ results-severe/
   stationkeeping/                  # avaliação de manutenção de posição
   trajectory_experiments/          # avaliação por controlador e trajetória
   tables_*/                        # tabelas agregadas por experimento
+training_runs/
+  ppo_physics_v2_seed42/           # retreinamento Physics v2, seed 42
+    models/                        # modelo final e checkpoints
+    tensorboard/                   # logs TensorBoard do treinamento
+    evaluation/                    # CSVs e manifesto da avaliação
 ```
 
 ### Modelos e seeds de treinamento
@@ -49,6 +54,12 @@ No checkout em que este inventário foi elaborado, foi identificado um log
 local dessa ablação para a seed 42; isso não confirma a disponibilidade dos
 dados correspondentes no outro computador. Não presuma que as seeds 43–46
 sejam dessa ablação sem conferir suas configurações e logs.
+
+O pacote `training_runs/ppo_physics_v2_seed42/` é uma execução separada de
+retreinamento com a dinâmica `zup-airy-coriolis-v2`, seed 42. Ele contém modelo
+final, checkpoints, logs TensorBoard, configuração e CSVs de avaliação para
+cenários moderado e severo. Não é uma seed adicional do baseline curriculum
+42–46 nem evidência de cinco seeds para uma ablação.
 
 Os caminhos dos logs do TensorBoard ficam em `bluerov_tensorboard/`. Os
 diretórios com `Curriculum_seed_<seed>` correspondem às execuções identificadas

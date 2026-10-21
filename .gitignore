@@ -33,6 +33,14 @@ results-severe/**/*.png
 !models_ftc/**/*.zip
 !models_ftc/**/*.pkl
 !models_ftc/**/*.pth
+!training_runs/
+!training_runs/ppo_physics_v2_seed42/
+!training_runs/ppo_physics_v2_seed42/**/
+!training_runs/ppo_physics_v2_seed42/**/*.csv
+!training_runs/ppo_physics_v2_seed42/**/*.tfevents.*
+!training_runs/ppo_physics_v2_seed42/**/*.zip
+!training_runs/ppo_physics_v2_seed42/**/*.pkl
+!training_runs/ppo_physics_v2_seed42/**/*.yaml
 
 # Distribution / packaging
 .Python
