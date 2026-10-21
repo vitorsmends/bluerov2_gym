@@ -1,0 +1,175 @@
+environment:
+  id: BlueRov-v0
+  entry_point: bluerov2_gym.envs:BlueRov
+  max_episode_steps: 1000
+  render_mode: null
+  config:
+    dt: 0.1
+    action_space:
+      low: -40.0
+      high: 40.0
+      shape: [6]
+    termination:
+      max_abs_z: 20.0
+      max_abs_x: 30.0
+      max_abs_y: 30.0
+      max_abs_roll: 1.5
+      max_abs_pitch: 1.5
+    reward:
+      weights:
+        position: 1.0
+        velocity: 0.1
+        yaw: 0.5
+        stability: 0.5
+      success:
+        radius: 0.20
+        bonus: 1.0
+  dynamics_config_file: dynamics_config.yaml
+  dynamics_config: {}
+
+paths:
+  tensorboard_log: ./bluerov_tensorboard/
+  model_dir: ./models/
+  model_name: bluerov_ppo_curriculum
+  vecnormalize_name: bluerov_vec_normalize_curriculum.pkl
+
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  clip_reward: 10.0
+  gamma: 0.99
+
+checkpoint:
+  save_freq: 100000
+  name_prefix: bluerov_ppo_curriculum_checkpoint
+  save_vecnormalize: true
+
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 4096
+  batch_size: 256
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs:
+    net_arch:
+      pi: [256, 256]
+      vf: [256, 256]
+
+training:
+  tb_log_name: PPO_BlueROV2_Curriculum
+
+jonswap_defaults:
+  directional_spread_deg: 25.0
+  water_depth: 30.0
+  x_eval: 0.0
+  y_eval: 0.0
+  z_eval: -2.0
+  alpha_wave: 0.02
+  alpha_noise: 0.30
+  alpha_js: 0.0081
+  enable_wave_force: true
+  wave_force_gain: [35.0, 35.0, 50.0]
+  wave_force_application_point: [0.0, 0.0, 0.05]
+  max_wave_force: 25.0
+  max_wave_moment: 8.0
+  seed: 42
+
+initial_jonswap:
+  Hs: 0.0
+  Tp: 8.0
+  gamma: 1.0
+  N: 32
+  wave_dir: [1.0, 0.0]
+  scale: 0.0
+  max_current: 0.0
+  noise_std: 0.0
+  directional_spread_deg: 0.0
+  enable_wave_force: false
+
+curriculum:
+  - name: No Waves
+    timesteps: 200000
+    jonswap:
+      Hs: 0.0
+      Tp: 8.0
+      gamma: 1.0
+      N: 32
+      wave_dir: [1.0, 0.0]
+      scale: 0.0
+      max_current: 0.0
+      noise_std: 0.0
+      directional_spread_deg: 0.0
+      enable_wave_force: false
+
+  - name: Calm Sea - Head Waves
+    timesteps: 400000
+    jonswap:
+      Hs: 1.25
+      Tp: 7.03
+      gamma: 1.5
+      N: 64
+      wave_dir: [1.0, 0.0]
+      scale: 0.25
+      max_current: 0.14
+      noise_std: 0.005
+      directional_spread_deg: 15.0
+      enable_wave_force: true
+      max_wave_force: 15.0
+      max_wave_moment: 5.0
+
+  - name: Moderate Sea - Quartering Waves
+    timesteps: 600000
+    jonswap:
+      Hs: 2.50
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir: [0.707, 0.707]
+      scale: 0.50
+      max_current: 0.50
+      noise_std: 0.010
+      directional_spread_deg: 25.0
+      enable_wave_force: true
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+
+  - name: Severe Sea - Beam Waves
+    timesteps: 800000
+    jonswap:
+      Hs: 4.50
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir: [0.0, 1.0]
+      scale: 0.80
+      max_current: 0.80
+      noise_std: 0.020
+      directional_spread_deg: 25.0
+      enable_wave_force: true
+      max_wave_force: 35.0
+      max_wave_moment: 10.0
+
+  - name: Extreme Sea - Following Waves
+    timesteps: 1000000
+    jonswap:
+      Hs: 4.50
+      Tp: 8.0
+      gamma: 5.0
+      N: 128
+      wave_dir: [-1.0, 0.0]
+      scale: 1.20
+      max_current: 1.50
+      noise_std: 0.030
+      directional_spread_deg: 35.0
+      enable_wave_force: true
+      wave_force_gain: [45.0, 45.0, 65.0]
+      max_wave_force: 40.0
+      max_wave_moment: 12.0

@@ -369,7 +369,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Generate spatial path-tracking figures from benchmark CSVs."
     )
-    parser.add_argument("--results-root", type=Path, default=Path("results-physics-v2"))
+    parser.add_argument("--results-root", type=Path, default=Path("training_runs/ppo_physics_v2_seed42/evaluation"))
     parser.add_argument(
         "--scenario",
         choices=("moderate", "severe"),

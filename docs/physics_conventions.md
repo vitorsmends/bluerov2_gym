@@ -56,13 +56,13 @@ NMPC uses a zero-disturbance forecast, as before; it is not given future waves.
 
 ## Data and execution
 
-Existing policies are not retrained automatically. New inference is evaluated
-in the corrected plant; old results in `results-jonswap` belong to the earlier
-model and must not be relabeled as v2.
+The current article evaluates the retrained seed-42 checkpoint in
+`training_runs/ppo_physics_v2_seed42/`. Previous result campaigns were removed;
+older models and training logs remain separate historical artifacts.
 
 ```bash
 .venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python run_oceans.py --results-root results-physics-v2
+.venv/bin/python run_oceans.py --plots-only --results-root training_runs/ppo_physics_v2_seed42/evaluation
 ```
 
 Each new campaign stores its physics version, physical configuration, scenario

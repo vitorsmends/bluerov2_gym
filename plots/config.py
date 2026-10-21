@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 
-RESULTS_ROOT = Path(os.environ.get("BLUEROV_RESULTS_ROOT", "results-physics-v2"))
+RESULTS_ROOT = Path(os.environ.get("BLUEROV_RESULTS_ROOT", "training_runs/ppo_physics_v2_seed42/evaluation"))
 
 SCENARIOS = {
     "Moderate": RESULTS_ROOT / "moderate/trajectory_experiments",

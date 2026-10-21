@@ -8,12 +8,12 @@ output locations and the corrected spectrum.
 Regenerate figures from an existing campaign:
 
 ```bash
-.venv/bin/python run_oceans.py --plots-only --results-root results-physics-v2
+.venv/bin/python run_oceans.py --plots-only --results-root training_runs/ppo_physics_v2_seed42/evaluation
 ```
 
 The default campaign uses one fixed PPO policy and one disturbance realization
 per condition. Aggregate plots describe variation across tasks and sea states.
-Outputs are isolated in `results-physics-v2/figures` and `results-physics-v2/tables`.
+Outputs are isolated in `training_runs/ppo_physics_v2_seed42/evaluation/figures` and `training_runs/ppo_physics_v2_seed42/evaluation/tables`.
 The plotting pipeline requires all 40 CSVs and CPU timing columns before writing
 aggregate figures. Energy is estimated using `plots/t200_performance_16v.csv`.
 

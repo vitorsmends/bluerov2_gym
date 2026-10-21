@@ -1,4 +1,4 @@
-"""Train a fresh seed-42 PPO policy in the corrected physical environment."""
+"""Retrain the PPO configuration from commit 0436ce3 in the current environment."""
 from __future__ import annotations
 
 import argparse
@@ -16,13 +16,15 @@ ROOT = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path,
-                        default=ROOT / "training_runs/ppo_physics_v2_seed42")
+                        default=ROOT / "training_runs/ppo_0436ce3_seed42")
     parser.add_argument("--evaluate", action="store_true",
                         help="After training, compare all four controllers and generate figures.")
+    parser.add_argument("--reuse-results", type=Path,
+                        help="After training, simulate only PPO and compare with saved PID/SMC/NMPC results.")
     parser.add_argument("--smoke-test", action="store_true",
                         help="Only verify the training pipeline (320 steps); not a scientific training run.")
     args = parser.parse_args()
-    if args.smoke_test and args.evaluate:
+    if args.smoke_test and (args.evaluate or args.reuse_results):
         parser.error("--evaluate requires the full training run; omit --smoke-test")
     os.chdir(ROOT)
     output = args.output_dir.expanduser().resolve()
@@ -30,8 +32,16 @@ def main():
         output = output / "smoke_test"
     if output.exists() and any(output.iterdir()):
         raise FileExistsError(f"Training output is not empty: {output}. Choose another --output-dir.")
+    if args.reuse_results:
+        from run_oceans import prepare_reused_results
+        from experiments.config_loader import load_config
+        from bluerov2_gym.envs.core.dynamics import Dynamics
+        comparison = load_config(ROOT / 'experiments/config/article_trajectories.yaml')
+        physics = yaml.safe_load((ROOT / 'config/dynamics_config.yaml').read_text())
+        source, files = prepare_reused_results(args.reuse_results, comparison, physics, Dynamics.MODEL_VERSION)
+        print(f'Validated {len(files)} saved PID/SMC/NMPC files from {source}', flush=True)
 
-    config = load_training_config(ROOT / "config/training_config.yaml")
+    config = load_training_config(ROOT / "config/training_0436ce3.yaml")
     config["environment"]["dynamics_config_file"] = str(ROOT / "config/dynamics_config.yaml")
     config["environment"]["max_episode_steps"] = 1000
     config["training"]["seed"] = 42
@@ -47,7 +57,11 @@ def main():
         config["ppo"].update(n_steps=64, batch_size=64, n_epochs=1)
         for stage in config["curriculum"]:
             stage["timesteps"] = 64
-    config["experiment"] = {"purpose": "pipeline_smoke_test" if args.smoke_test else "physics_v2_retraining"}
+    config["experiment"] = {
+        "purpose": "pipeline_smoke_test" if args.smoke_test else "0436ce3_policy_retraining",
+        "training_reference_commit": "0436ce3482e95105cb2376681b2bd6cbec72d99c",
+        "initialization": "fresh PPO weights and VecNormalize; original training configuration",
+    }
     output.mkdir(parents=True, exist_ok=True)
     config_path = output / "training_config.yaml"
     config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
@@ -56,10 +70,13 @@ def main():
     model = output / "models/bluerov_ppo_physics_v2_seed_42.zip"
     normalizer = output / "models/bluerov_vecnormalize_physics_v2_seed_42.pkl"
     print(f"\nModel: {model}\nNormalizer: {normalizer}", flush=True)
-    if args.evaluate:
-        subprocess.run([sys.executable, str(ROOT / "run_oceans.py"),
+    if args.evaluate or args.reuse_results:
+        command = [sys.executable, str(ROOT / "run_oceans.py"),
                         "--model", str(model), "--vecnormalize", str(normalizer),
-                        "--results-root", str(output / "evaluation")], check=True)
+                        "--results-root", str(output / "evaluation")]
+        if args.reuse_results:
+            command += ["--reuse-results", str(args.reuse_results.expanduser().resolve())]
+        subprocess.run(command, check=True)
 
 
 if __name__ == "__main__":

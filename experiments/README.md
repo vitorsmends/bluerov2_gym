@@ -1,15 +1,18 @@
 # Comparação dos controladores: moderate e severe
 
-## Retreinar somente a seed 42 no modelo físico v2
+## Retreinar a política do commit 0436ce3 (seed 42)
 
 ```bash
 .venv/bin/python train_ppo_seed42.py
 ```
 
+Usa a configuração original de `0436ce3482e95105cb2376681b2bd6cbec72d99c`,
+preservada em `config/training_0436ce3.yaml`, com a dinâmica atual corrigida.
 Treina do zero, com normalizador novo, currículo completo de cinco etapas e
 orçamento nominal de 3 milhões de passos. O limite efetivo dos episódios é
 1000. Modelo, normalizador, configuração e TensorBoard ficam separados em
-`training_runs/ppo_physics_v2_seed42/`; artefatos anteriores são preservados.
+`training_runs/ppo_0436ce3_seed42/`; artefatos anteriores são preservados.
+
 
 Para treinar e, ao terminar, executar a comparação dos quatro controladores
 usando o novo modelo e gerar os gráficos, use em vez do comando anterior:
@@ -19,6 +22,18 @@ usando o novo modelo e gerar os gráficos, use em vez do comando anterior:
 ```
 
 Os resultados dessa avaliação ficam na subpasta `evaluation/` do treino.
+Para treinar e executar somente o novo PPO, reutilizando os dados já salvos dos
+outros três controladores e gerando a comparação completa:
+
+```bash
+python train_ppo_seed42.py --reuse-results training_runs/ppo_physics_v2_seed42/evaluation
+```
+
+O comando valida a física, configuração e integridade dos 30 CSVs convencionais
+antes de treinar. Copia esses CSVs para a nova avaliação, executa os dez casos
+PPO e gera gráficos e tabelas com os quatro controladores. Preserva os dados
+originais e registra os hashes dos arquivos reutilizados no manifesto.
+
 Se já existir uma execução nessa pasta, escolha outro destino com
 `--output-dir training_runs/ppo_physics_v2_seed42_run2`.
 `--smoke-test` executa apenas 320 passos para verificar o pipeline e salva em
@@ -39,36 +54,35 @@ lidos de `experiments/ocean_environment.yaml`. Uma realização por condição �
 padrão. A seed de distúrbio é a mesma entre controladores. Não se executam novos
 modelos PPO nem a análise de sensibilidade às seeds de treinamento.
 
-Por padrão, utiliza `ppo_trajectory_final.zip` e `vec_normalize.pkl`, o par
-indicado na configuração legada de comparação. Isso não atribui retrospectivamente
-os CSVs antigos a esse modelo. Para selecionar outra política fixa, informe o par:
+Por padrão, utiliza o modelo retreinado e o normalizador de
+`training_runs/ppo_physics_v2_seed42/models/`, identificados no manifesto atual. Para selecionar outra política fixa, informe o par:
 
 ```bash
 .venv/bin/python run_oceans.py \
   --model models/bluerov_ppo_curriculum_seed_42.zip \
   --vecnormalize models/bluerov_vec_normalize_curriculum_seed_42.pkl \
-  --results-root results-physics-v2-seed42
+  --results-root evaluation-new-run
 ```
 
 Saídas padrão:
 
-- `results-physics-v2/moderate/trajectory_experiments/`: CSVs moderate.
-- `results-physics-v2/severe/trajectory_experiments/`: CSVs severe.
-- `results-physics-v2/manifest.yaml`: configuração, parâmetros de mar e hashes do
+- `training_runs/ppo_physics_v2_seed42/evaluation/moderate/trajectory_experiments/`: CSVs moderate.
+- `training_runs/ppo_physics_v2_seed42/evaluation/severe/trajectory_experiments/`: CSVs severe.
+- `training_runs/ppo_physics_v2_seed42/evaluation/manifest.yaml`: configuração, parâmetros de mar e hashes do
   modelo e normalizador.
-- `results-physics-v2/figures/`: gráficos agregados e trajetórias dos dois cenários.
-- `results-physics-v2/tables/`: tabelas RMSE e Pareto; tabelas espaciais também são
+- `training_runs/ppo_physics_v2_seed42/evaluation/figures/`: gráficos agregados e trajetórias dos dois cenários.
+- `training_runs/ppo_physics_v2_seed42/evaluation/tables/`: tabelas RMSE e Pareto; tabelas espaciais também são
   salvas nas subpastas de cada cenário.
 
 Uma pasta de resultados não vazia é recusada para preservar campanhas anteriores.
-Use outro `--results-root` para uma nova execução. Os arquivos antigos em
-`results-moderate`, `results-severe` e as figuras do artigo são preservados.
+Use outro `--results-root` para uma nova execução. As campanhas antigas foram removidas. A campanha atual e seus artefatos de
+treinamento são preservados; o artigo recebe cópias dos gráficos atuais.
 
 Para executar somente a coleta, adicione `--skip-plots`. Para gerar novamente
 os gráficos de uma campanha concluída:
 
 ```bash
-.venv/bin/python run_oceans.py --plots-only --results-root results-physics-v2
+.venv/bin/python run_oceans.py --plots-only --results-root training_runs/ppo_physics_v2_seed42/evaluation
 ```
 
 Teste curto de integração, separado dos dados científicos:
