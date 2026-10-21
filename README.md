@@ -60,6 +60,12 @@ Configuration files:
 The framework automatically executes experiments, records metrics,
 exports CSV files and generates plots.
 
+## Experiment data
+
+Experiment models, logs, and CSV results are organized and versioned with Git
+LFS. See [DATA.md](./DATA.md) for the directory layout, seed conventions, and
+download instructions.
+
 ## Environment
 
 State:

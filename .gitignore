@@ -13,9 +13,26 @@ __pycache__/
 *.csv
 ppo_traj_tensorboard/
 bluerov_tensorboard/
+!bluerov_tensorboard/
+!bluerov_tensorboard/**/*.tfevents.*
 results/
+!results/
+!results/**/*.csv
+results/**/*.png
 results-moderate/
+!results-moderate/
+!results-moderate/**/*.csv
+results-moderate/**/*.png
 results-severe/
+!results-severe/
+!results-severe/**/*.csv
+results-severe/**/*.png
+!models/**/*.zip
+!models/**/*.pkl
+!models/**/*.pth
+!models_ftc/**/*.zip
+!models_ftc/**/*.pkl
+!models_ftc/**/*.pth
 
 # Distribution / packaging
 .Python

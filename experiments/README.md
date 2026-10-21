@@ -92,3 +92,33 @@ runs.
 The general-purpose configuration remains available at
 `experiments/config/experiment.yaml`. Use the article-specific configuration
 above when reproducing the paper's two-sea-state trajectory campaign.
+
+## Versioning experiment data with Git LFS
+
+Install and initialize Git LFS once on each machine:
+
+```bash
+git lfs install
+```
+
+CSV results under `results/`, `results-moderate/`, and `results-severe/`,
+TensorBoard event files, and model artifacts (`.zip`, `.pkl`, and `.pth`)
+under `models/` or `models_ftc/` are configured to use Git LFS. Generated
+figures remain ignored because they can be recreated from the CSV results.
+
+After an experiment, check that the files you want to preserve are not ignored
+and add them to a commit:
+
+```bash
+git status --short
+git add results-severe/trajectory_experiments/
+git commit -m "Add experiment results"
+git push
+```
+
+Use `git add` with the specific results, TensorBoard, or model directory you
+want to preserve. Confirm which files are stored with LFS using
+`git lfs ls-files`. To retrieve LFS files after cloning, run `git lfs pull`.
+Files committed before the LFS rules were added remain stored as regular Git
+objects; these rules apply to files added afterward and do not rewrite
+repository history.
