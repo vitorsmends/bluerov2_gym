@@ -1,5 +1,31 @@
 # Comparação dos controladores: moderate e severe
 
+## Retreinar somente a seed 42 no modelo físico v2
+
+```bash
+.venv/bin/python train_ppo_seed42.py
+```
+
+Treina do zero, com normalizador novo, currículo completo de cinco etapas e
+orçamento nominal de 3 milhões de passos. O limite efetivo dos episódios é
+1000. Modelo, normalizador, configuração e TensorBoard ficam separados em
+`training_runs/ppo_physics_v2_seed42/`; artefatos anteriores são preservados.
+
+Para treinar e, ao terminar, executar a comparação dos quatro controladores
+usando o novo modelo e gerar os gráficos, use em vez do comando anterior:
+
+```bash
+.venv/bin/python train_ppo_seed42.py --evaluate
+```
+
+Os resultados dessa avaliação ficam na subpasta `evaluation/` do treino.
+Se já existir uma execução nessa pasta, escolha outro destino com
+`--output-dir training_runs/ppo_physics_v2_seed42_run2`.
+`--smoke-test` executa apenas 320 passos para verificar o pipeline e salva em
+uma subpasta `smoke_test/`; esse modo não constitui um treinamento utilizável.
+
+## Executar a comparação
+
 Na raiz do repositório, execute:
 
 ```bash
