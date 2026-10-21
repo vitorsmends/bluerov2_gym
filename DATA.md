@@ -1,7 +1,9 @@
 # Organização dos dados de experimentos
 
-Os arquivos pesados são versionados com Git LFS. Depois de clonar o
-repositório, baixe-os com:
+Os arquivos pesados são versionados com Git LFS. Um clone pode mostrar os
+caminhos dos arquivos mesmo quando o conteúdo ainda não foi baixado: nesse
+caso, o arquivo local contém apenas um ponteiro LFS. Depois de clonar o
+repositório, baixe os objetos com:
 
 ```bash
 git lfs install
@@ -34,26 +36,38 @@ results-severe/
 
 ### Modelos e seeds de treinamento
 
-Há artefatos de treinamento para as seeds **42, 43, 44, 45 e 46**. Para cada
-seed, `models/` contém o modelo PPO final (`.zip`), as estatísticas de
-normalização do ambiente (`.pkl`), checkpoints intermediários e a configuração
-efetiva (`.yaml`). Os checkpoints incluem o número de passos no nome; use o
-modelo final e o arquivo `VecNormalize` da mesma seed ao avaliar uma política.
+O commit inclui nomes de artefatos de treinamento para as seeds **42, 43, 44,
+45 e 46**. Isso não garante que seus conteúdos estejam baixados em cada clone,
+nem identifica por si só uma ablação. Quando os objetos estiverem disponíveis,
+`models/` contém modelos PPO (`.zip`), estatísticas de normalização do ambiente
+(`.pkl`), checkpoints intermediários e configurações (`.yaml`). Os checkpoints
+incluem o número de passos no nome; use o modelo e o arquivo `VecNormalize` da
+mesma seed ao avaliar uma política.
 
-Os logs do TensorBoard ficam em `bluerov_tensorboard/`. Os diretórios com
-`Curriculum_seed_<seed>` correspondem às execuções identificadas por seed.
-Os demais diretórios incluem outros treinamentos, estudos de Optuna e runs
-anteriores; o nome do diretório não garante por si só uma seed específica.
+Não há evidência documentada de cinco seeds para a ablação `no_curriculum`.
+No checkout em que este inventário foi elaborado, foi identificado um log
+local dessa ablação para a seed 42; isso não confirma a disponibilidade dos
+dados correspondentes no outro computador. Não presuma que as seeds 43–46
+sejam dessa ablação sem conferir suas configurações e logs.
+
+Os caminhos dos logs do TensorBoard ficam em `bluerov_tensorboard/`. Os
+diretórios com `Curriculum_seed_<seed>` correspondem às execuções identificadas
+por seed. Os demais diretórios incluem outros treinamentos, estudos de Optuna
+e runs anteriores; o nome do diretório não garante por si só uma seed
+específica.
 
 ### Resultados de avaliação
 
-Os nomes das pastas indicam o cenário ou tipo de avaliação; os arquivos CSV
-contêm as medições. Exemplos:
+Os nomes das pastas indicam o cenário ou tipo de avaliação; quando hidratados,
+os arquivos CSV contêm as medições. Exemplos:
 
 - `results-severe/path_tracking/`: CSV por controlador (`pid.csv`,
-  `ppo.csv`, etc.). Os resultados atuais têm `repetition_id` e `seed`.
+  `ppo.csv`, etc.). No checkout usado para elaborar este documento, os CSVs
+  inspecionados tinham `repetition_id` e `seed`; confira os arquivos baixados
+  no seu clone antes de depender dessas colunas.
 - `results-severe/stationkeeping/`: CSV por controlador para manutenção de
-  posição, também com repetições e seeds de distúrbio.
+  posição. Os CSVs inspecionados no checkout de referência tinham colunas de
+  repetição e seed; valide os arquivos locais após o download.
 - `results-severe/trajectory_experiments/`: CSV por controlador e trajetória,
   por exemplo `ppo_circle.csv`. Os arquivos atualmente armazenados são
   resultados legados de uma execução de 1000 passos: não têm `repetition_id`
@@ -74,6 +88,23 @@ Para conferir os arquivos LFS presentes no clone:
 ```bash
 git lfs ls-files
 ```
+
+Em geral, `*` na saída indica um objeto LFS baixado e `-` indica que o
+conteúdo não está disponível localmente. Depois do `git lfs pull`, confira a
+saída novamente e inspecione o cabeçalho dos CSVs relevantes, por exemplo:
+
+```bash
+git lfs pull
+git lfs ls-files
+head -n 1 results-severe/path_tracking/ppo.csv
+head -n 1 results-severe/stationkeeping/ppo_stationkeeping.csv
+head -n 1 results-severe/trajectory_experiments/ppo_circle.csv
+```
+
+Para confirmar uma seed de treinamento ou ablação, compare também os arquivos
+de configuração em `models/` e os logs correspondentes do TensorBoard; a
+existência do caminho no Git ou o nome da pasta não prova que o objeto foi
+baixado nem que pertence a uma ablação específica.
 
 Para entender como reproduzir os treinamentos e benchmarks, consulte
 [experiments/README.md](./experiments/README.md).
