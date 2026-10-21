@@ -24,7 +24,6 @@ from stable_baselines3 import __version__ as stable_baselines3_version
 from tqdm.auto import tqdm
 
 from bluerov2_gym.envs.core.config_utils import deep_merge, load_yaml
-from bluerov2_gym.envs.core.dynamics import Dynamics
 
 DEFAULT_CONFIG = {
     "environment": {
@@ -216,10 +215,9 @@ class TrainingProgressCallback(BaseCallback):
             self.global_bar.refresh()
 
 
-def make_env(env_id, render_mode=None, env_config=None, dynamics_config=None, max_episode_steps=None):
+def make_env(env_id, render_mode=None, env_config=None, dynamics_config=None):
     def _init():
-        env = gym.make(env_id, render_mode=render_mode, env_config=env_config,
-                       dynamics_config=dynamics_config, max_episode_steps=max_episode_steps)
+        env = gym.make(env_id, render_mode=render_mode, env_config=env_config, dynamics_config=dynamics_config)
         return Monitor(env)
     return _init
 
@@ -373,9 +371,6 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
     os.makedirs(log_dir, exist_ok=True)
     os.makedirs(model_dir, exist_ok=True)
     manifest = {
-        "dynamics_version": Dynamics.MODEL_VERSION,
-        "coordinate_convention": "right-handed z-up (world and body)",
-        "resolved_dynamics_config": dynamics_config,
         "python_version": str(platform.python_version()),
         "numpy_version": str(np.__version__),
         "scipy_version": str(scipy.__version__),
@@ -399,7 +394,6 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
             render_mode=env_section.get("render_mode"),
             env_config=env_config,
             dynamics_config=dynamics_config,
-            max_episode_steps=int(env_section["max_episode_steps"]),
         )
     ])
     env = VecNormalize(env, **config["vecnormalize"])
@@ -451,9 +445,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         )
 
         set_curriculum_level(env, jonswap_params)
-        # Invalidate PPO's cached observation when changing the curriculum.
-        # learn() then resets the environment and normalization state together.
-        model.set_env(env, force_reset=True)
+        env.reset()
         progress_callback = TrainingProgressCallback(
             total_timesteps=total_curriculum_timesteps,
             phase_timesteps=lesson["timesteps"],
