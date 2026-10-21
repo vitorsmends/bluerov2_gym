@@ -13,6 +13,9 @@ vehicle:
     z: 0.10
 
   inertia:
+    # Explicit modeling convention for these coefficients; I_O is computed
+    # from I_G with the parallel-axis theorem when constructing M_RB.
+    reference: center_of_gravity
     Ixx: 5.2539
     Ixy: 0.0144
     Ixz: 0.3341

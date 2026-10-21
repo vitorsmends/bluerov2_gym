@@ -5,7 +5,10 @@ import numpy as np
 from scipy.linalg import solve_discrete_are
 from scipy.optimize import minimize
 
-from dynamics import Dynamics
+try:
+    from .dynamics import Dynamics
+except ImportError:  # Direct script execution
+    from dynamics import Dynamics
 
 
 def bryson_diag(max_values, scale=1.0):
@@ -33,10 +36,8 @@ def vector_to_dict(x):
 
 
 def disable_disturbance(dyn):
-    def zero_current():
-        return np.zeros(3, dtype=float)
-
-    dyn._jonswap_current = zero_current
+    dyn.set_jonswap_params(Hs=0.0, scale=0.0, noise_std=0.0,
+                           max_current=0.0, enable_wave_force=False)
 
 
 def step_discrete(dyn, x, u):

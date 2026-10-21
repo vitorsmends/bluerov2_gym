@@ -6,6 +6,7 @@ import re
 
 import matplotlib.pyplot as plt
 import numpy as np
+from matplotlib.ticker import ScalarFormatter
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 
@@ -193,72 +194,159 @@ def plot_seed_groups(
         for label, run_dirs in groups.items()
     }
     required_tag = "rollout/ep_rew_mean"
+    explained_variance_tag = "train/explained_variance"
+    loss_tag = "train/loss"
     for label, runs in loaded.items():
-        usable = sum(required_tag in metrics for _, metrics in runs)
-        if usable < min_seeds:
-            raise RuntimeError(
-                f"Group '{label}' has {usable} runs with {required_tag}; "
-                f"at least {min_seeds} are required."
-            )
+        for tag in (required_tag, explained_variance_tag, loss_tag):
+            usable = sum(tag in metrics for _, metrics in runs)
+            if usable < min_seeds:
+                raise RuntimeError(
+                    f"Group '{label}' has {usable} runs with {tag}; "
+                    f"at least {min_seeds} are required for the combined training figure."
+                )
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    plt.rcParams.update({"font.family": "serif", "font.size": 11})
-    output_paths = []
+    plt.rcParams.update({"font.family": "serif", "font.size": 10})
+    fig, (reward_ax, explained_variance_ax, loss_ax) = plt.subplots(
+        3, 1, figsize=(6.5, 5.2), sharex=True
+    )
+    palette = plt.get_cmap("tab10")
+    reward_formatter = ScalarFormatter(useMathText=True)
+    reward_formatter.set_powerlimits((0, 0))
+    reward_ax.yaxis.set_major_formatter(reward_formatter)
+    loss_formatter = ScalarFormatter(useMathText=True)
+    loss_formatter.set_powerlimits((0, 0))
+    loss_ax.yaxis.set_major_formatter(loss_formatter)
+    steps_formatter = ScalarFormatter(useMathText=True)
+    steps_formatter.set_powerlimits((0, 0))
+    loss_ax.xaxis.set_major_formatter(steps_formatter)
 
-    for tag, title, ylabel, filename, color in METRICS:
-        fig, ax = plt.subplots(figsize=(7.2, 4.6))
-        plotted_groups = 0
-        for label, runs in loaded.items():
-            valid_runs = [
-                (run_dir, metrics[tag])
-                for run_dir, metrics in runs
-                if tag in metrics and len(metrics[tag][0]) >= 2
-            ]
-            if len(valid_runs) < min_seeds:
-                print(
-                    f"[WARN] Skipped {label} / {title}: "
-                    f"{len(valid_runs)} runs contain this metric; need {min_seeds}."
-                )
-                continue
+    def aggregate(
+        runs: list[tuple[Path, ScalarMetrics]], tag: str, label: str
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+        valid_runs = [
+            metrics[tag]
+            for _, metrics in runs
+            if tag in metrics and len(metrics[tag][0]) >= 2
+        ]
+        if len(valid_runs) < min_seeds:
+            raise RuntimeError(
+                f"Group '{label}' has {len(valid_runs)} usable runs for {tag}; "
+                f"at least {min_seeds} are required."
+            )
+        start = max(steps[0] for steps, _ in valid_runs)
+        end = min(steps[-1] for steps, _ in valid_runs)
+        if start >= end:
+            raise RuntimeError(f"Group '{label}' has no shared timestep range for {tag}.")
+        grid = np.unique(np.concatenate([
+            steps[(steps >= start) & (steps <= end)]
+            for steps, _ in valid_runs
+        ]))
+        aligned = np.vstack([
+            np.interp(grid, steps, values)
+            for steps, values in valid_runs
+        ])
+        return (
+            grid,
+            np.mean(aligned, axis=0),
+            np.std(aligned, axis=0, ddof=1),
+            len(valid_runs),
+        )
 
-            start = max(data[0][0] for _, data in valid_runs)
-            end = min(data[0][-1] for _, data in valid_runs)
-            if start >= end:
-                print(f"[WARN] Skipped {label} / {title}: runs have no shared timestep range.")
-                continue
+    color_handles = []
+    for index, (label, runs) in enumerate(loaded.items()):
+        color = palette(index % 10)
+        reward_grid, reward_mean, reward_std, run_count = aggregate(
+            runs, required_tag, label
+        )
+        reward_ax.plot(
+            reward_grid,
+            reward_mean,
+            color=color,
+            linewidth=1.8,
+        )
+        reward_ax.fill_between(
+            reward_grid,
+            reward_mean - reward_std,
+            reward_mean + reward_std,
+            color=color,
+            alpha=0.15,
+            linewidth=0,
+        )
 
-            grid = np.unique(np.concatenate([
-                steps[(steps >= start) & (steps <= end)]
-                for _, (steps, _) in valid_runs
-            ]))
-            aligned = np.vstack([
-                np.interp(grid, steps, values)
-                for _, (steps, values) in valid_runs
-            ])
-            mean = np.mean(aligned, axis=0)
-            std = np.std(aligned, axis=0, ddof=1)
-            ax.plot(grid, mean, linewidth=1.9, label=f"{label} (n={len(valid_runs)})")
-            ax.fill_between(grid, mean - std, mean + std, alpha=0.18)
-            plotted_groups += 1
+        ev_grid, ev_mean, ev_std, _ = aggregate(
+            runs, explained_variance_tag, label
+        )
+        explained_variance_ax.plot(
+            ev_grid, ev_mean, color=color, linewidth=1.5
+        )
+        explained_variance_ax.fill_between(
+            ev_grid,
+            ev_mean - ev_std,
+            ev_mean + ev_std,
+            color=color,
+            alpha=0.15,
+            linewidth=0,
+        )
 
-        if not plotted_groups:
-            plt.close(fig)
-            continue
-        ax.set_title(title)
-        ax.set_xlabel("Environment steps")
-        ax.set_ylabel(ylabel)
-        ax.grid(True, linestyle="--", alpha=0.5)
-        ax.legend(frameon=True, fontsize=9)
-        fig.tight_layout()
-        safe_filename = re.sub(r"[^A-Za-z0-9_-]+", "_", filename)
-        output_path = output_dir / f"ppo_{safe_filename}_multi_seed.pdf"
-        fig.savefig(output_path, dpi=300, bbox_inches="tight")
-        plt.close(fig)
-        output_paths.append(output_path)
+        loss_grid, loss_mean, loss_std, _ = aggregate(runs, loss_tag, label)
+        loss_ax.plot(loss_grid, loss_mean, color=color, linewidth=1.5)
+        loss_ax.fill_between(
+            loss_grid,
+            loss_mean - loss_std,
+            loss_mean + loss_std,
+            color=color,
+            alpha=0.15,
+            linewidth=0,
+        )
 
-    if not output_paths:
-        raise RuntimeError("No supported TensorBoard metrics were available for multi-seed plots.")
-    return output_paths
+        color_handles.append(
+            plt.Line2D(
+                [0], [0], color=color, linewidth=2, label=f"{label} (n={run_count})"
+            )
+        )
+
+    reward_ax.set_ylabel("Mean episode reward")
+    explained_variance_ax.set_ylabel("Explained variance")
+    loss_ax.set_ylabel("PPO loss")
+    loss_ax.set_xlabel("Training steps")
+    for axis in (reward_ax, explained_variance_ax, loss_ax):
+        axis.grid(True, linestyle="--", alpha=0.4)
+        axis.tick_params(axis="both", labelsize=9)
+
+    reward_ax.text(
+        0.01, 0.95, "(a)", transform=reward_ax.transAxes,
+        ha="left", va="top", fontweight="bold", fontsize=10,
+    )
+    explained_variance_ax.text(
+        0.01, 0.95, "(b)", transform=explained_variance_ax.transAxes,
+        ha="left", va="top", fontweight="bold", fontsize=10,
+    )
+    loss_ax.text(
+        0.01, 0.95, "(c)", transform=loss_ax.transAxes,
+        ha="left", va="top", fontweight="bold", fontsize=10,
+    )
+    reward_ax.legend(
+        handles=color_handles, frameon=False, fontsize=9, ncol=2, loc="lower right"
+    )
+    fig.tight_layout(h_pad=0.35)
+    output_path = output_dir / "ppo_training_summary_multi_seed.pdf"
+    fig.savefig(output_path, dpi=300, bbox_inches="tight")
+    plt.close(fig)
+
+    obsolete_filenames = {
+        f"ppo_{filename}_multi_seed.pdf" for _, _, _, filename, _ in METRICS
+    }
+    obsolete_filenames.update({
+        "ppo_learning_curve_multi_seed.pdf",
+        "ppo_convergence_diagnostics_multi_seed.pdf",
+    })
+    for filename in obsolete_filenames:
+        obsolete_path = output_dir / filename
+        if obsolete_path != output_path and obsolete_path.is_file():
+            obsolete_path.unlink()
+
+    return [output_path]
 
 
 def parse_args() -> argparse.Namespace:

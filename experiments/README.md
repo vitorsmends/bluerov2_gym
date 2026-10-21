@@ -1,124 +1,78 @@
-# Reproducing the article's trajectory experiments
+# Comparação dos controladores: moderate e severe
 
-The article benchmark is configured independently from station-keeping. It
-contains five trajectories, four controllers, the moderate and severe sea
-states, and five paired disturbance seeds per case.
-
-Run the PPO curriculum training from the repository root:
+Na raiz do repositório, execute:
 
 ```bash
-python training/train_curriculum.py --config config/training_config.yaml
+.venv/bin/python run_oceans.py
 ```
 
-This deliberately uses the existing training setup and checkpoint naming. Its
-curriculum schedule remains the one in `config/training_config.yaml`; the
-benchmark changes below do not retrain or replace the PPO policy.
+O comando executa PID, SMC, NMPC e uma política PPO fixa nas cinco trajetórias,
+para moderate e severe: 40 simulações de 1000 passos, dt=0.1 s. A configuração
+está em `experiments/config/article_trajectories.yaml`; os parâmetros de mar são
+lidos de `experiments/ocean_environment.yaml`. Uma realização por condição é o
+padrão. A seed de distúrbio é a mesma entre controladores. Não se executam novos
+modelos PPO nem a análise de sensibilidade às seeds de treinamento.
 
-For a reproducibility/robustness campaign, run five independent trainings
-instead of interpreting the five benchmark disturbance repetitions as training
-replicates:
+Por padrão, utiliza `ppo_trajectory_final.zip` e `vec_normalize.pkl`, o par
+indicado na configuração legada de comparação. Isso não atribui retrospectivamente
+os CSVs antigos a esse modelo. Para selecionar outra política fixa, informe o par:
 
 ```bash
-python training/train_curriculum.py \
-  --config config/training_config.yaml \
-  --seeds 42 43 44 45 46
+.venv/bin/python run_oceans.py \
+  --model models/bluerov_ppo_curriculum_seed_42.zip \
+  --vecnormalize models/bluerov_vec_normalize_curriculum_seed_42.pkl \
+  --results-root results-physics-v2-seed42
 ```
 
-Each seed is passed to Stable-Baselines3/PyTorch/Python/NumPy through the PPO
-seed setting and to the JONSWAP disturbance generator. The models,
-VecNormalize statistics, checkpoints, TensorBoard logs, and effective YAML
-configuration are saved separately per seed. The existing single-run command
-and origin-stabilization objective remain unchanged.
+Saídas padrão:
 
-The article trajectory YAML currently selects one PPO model path. To measure
-policy-training variability end to end, evaluate each seed-specific model with
-its matching VecNormalize file, keep each evaluation output separate, and
-record the policy-training seed alongside the benchmark seed. The training
-script does not launch this combined policy-seed/evaluation-seed campaign
-automatically; the existing article figures and CSVs have not been regenerated
-from five PPO policies.
+- `results-physics-v2/moderate/trajectory_experiments/`: CSVs moderate.
+- `results-physics-v2/severe/trajectory_experiments/`: CSVs severe.
+- `results-physics-v2/manifest.yaml`: configuração, parâmetros de mar e hashes do
+  modelo e normalizador.
+- `results-physics-v2/figures/`: gráficos agregados e trajetórias dos dois cenários.
+- `results-physics-v2/tables/`: tabelas RMSE e Pareto; tabelas espaciais também são
+  salvas nas subpastas de cada cenário.
 
-Predefined training ablations are selected with `--ablation`:
-`position_only`, `no_velocity_penalty`, `no_yaw_penalty`,
-`no_stability_penalty`, `no_success_bonus`, `no_curriculum`,
-`no_direct_wave_force`, `no_current`, `no_noise`, `learning_rate_1e-4`, and
-`learning_rate_6e-4`. Train each configuration with the same five seeds and
-the same timestep budget before treating the comparison as evidence.
-`position_only` is a combined reward ablation that retains the success bonus
-while removing velocity, yaw, and roll/pitch terms; the three `no_*_penalty`
-variants isolate those terms individually. `no_curriculum` trains directly in
-the final configured sea state for the full curriculum budget; the other
-environment ablations alter only their named component.
+Uma pasta de resultados não vazia é recusada para preservar campanhas anteriores.
+Use outro `--results-root` para uma nova execução. Os arquivos antigos em
+`results-moderate`, `results-severe` e as figuras do artigo são preservados.
 
-Run the trajectory benchmark after the final PPO model and its `VecNormalize`
-statistics have been saved:
+Para executar somente a coleta, adicione `--skip-plots`. Para gerar novamente
+os gráficos de uma campanha concluída:
 
 ```bash
-python experiments/run_experiment.py \
-  --config experiments/config/article_trajectories.yaml
+.venv/bin/python run_oceans.py --plots-only --results-root results-physics-v2
 ```
 
-The runner writes one CSV per controller and trajectory under
-`results-moderate/trajectory_experiments/` and
-`results-severe/trajectory_experiments/`. Each CSV contains the five
-repetitions, with `repetition_id`, `seed`, sea-state parameters, and
-per-step measurements. The same seed is used for all controllers and
-trajectories within a repetition index and sea state, so comparisons are
-paired while repetitions use independent wave realizations.
-
-The existing CSVs in these directories are legacy outputs: they contain one
-1000-step run per controller/trajectory/sea-state and do not contain
-`repetition_id` or `seed`. They therefore do not provide the five-repetition
-evidence described by the current campaign configuration. Rerun the benchmark
-before using those files to support claims about paired disturbance seeds or
-evaluation variability.
-
-Generate the figures referenced by the article from those CSV files:
+Teste curto de integração, separado dos dados científicos:
 
 ```bash
-python plots/run_all.py
-python experiments/plots/plot_trajectory.py \
-  --scenario severe --repetition-id 0
+.venv/bin/python run_oceans.py --steps 4 --results-root /tmp/bluerov-smoke
+.venv/bin/python -m unittest discover -s tests -v
 ```
 
-The first command generates the aggregate figures. The second generates
-representative XY and 3D trajectory figures from the selected repetition. Both
-write paper figures to `oceans2026/figs/`; summary tables are written to
-`article_tables_simple/` and scenario-specific `results-*/tables_trajectory_experiments/`.
-RMSE and Pareto statistics are computed per trajectory and repetition;
-time-series and energy bands aggregate the individual trajectory/repetition
-runs.
+## Espectro corrigido
 
-The general-purpose configuration remains available at
-`experiments/config/experiment.yaml`. Use the article-specific configuration
-above when reproducing the paper's two-sea-state trajectory campaign.
+O gerador usa JONSWAP parametrizado por Hs, Tp e gamma conforme Fossen MSS,
+`waveSpectrum.m`, caso 7, com compensação DNV:
+`alpha = (5/16) Hs² wp⁴/g²` e `A_gamma = 1 - 0.287 ln(gamma)`.
+Fonte: https://github.com/cybergalactic/MSS/blob/master/LIBRARY/environment/waveSpectrum.m
 
-## Versioning experiment data with Git LFS
+`alpha_js` dos YAMLs antigos é aceito por compatibilidade, mas não controla mais
+a escala. A altura espectral é aproximada devido à compensação analítica,
+à discretização e ao corte em 3 wp; não há normalização numérica posterior.
+`scale`, filtros, limites de corrente e ganhos de carga continuam ativos: Hs
+parametriza o espectro de elevação, não uma força aplicada diretamente.
 
-Install and initialize Git LFS once on each machine:
+Essa mudança também afeta futuros treinamentos. Os modelos existentes foram
+aprendidos no ambiente anterior; esta campanha mede sua resposta no ambiente
+corrigido, sem retreiná-los. Ela não passa a representar um treino com as alturas
+corrigidas. O campo continua avaliado em ponto fixo, mas as velocidades filtradas agora
+são rotacionadas do referencial inercial para o corpo. Ambos usam Z positivo
+para cima. A versão física também corrige Coriolis, inércia e restauração;
+consulte `docs/physics_conventions.md`.
 
-```bash
-git lfs install
-```
-
-CSV results under `results/`, `results-moderate/`, and `results-severe/`,
-TensorBoard event files, and model artifacts (`.zip`, `.pkl`, and `.pth`)
-under `models/` or `models_ftc/` are configured to use Git LFS. Generated
-figures remain ignored because they can be recreated from the CSV results.
-
-After an experiment, check that the files you want to preserve are not ignored
-and add them to a commit:
-
-```bash
-git status --short
-git add results-severe/trajectory_experiments/
-git commit -m "Add experiment results"
-git push
-```
-
-Use `git add` with the specific results, TensorBoard, or model directory you
-want to preserve. Confirm which files are stored with LFS using
-`git lfs ls-files`. To retrieve LFS files after cloning, run `git lfs pull`.
-Files committed before the LFS rules were added remain stored as regular Git
-objects; these rules apply to files added afterward and do not rewrite
-repository history.
+Os CSVs incluem seed de distúrbio, repetição, cenário e tempo de CPU por passo.
+Com uma realização por condição, a dispersão dos gráficos representa variação
+entre trajetórias/cenários, não incerteza de repetições independentes.

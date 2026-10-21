@@ -6,7 +6,7 @@ import time
 import numpy as np
 
 from .base import BaseController
-from ..env_utils import wrap_angle
+from ..env_utils import wrap_angle, world_to_body_rotation, reference_velocity_error_body
 
 
 class PIDController(BaseController):
@@ -98,7 +98,7 @@ class PIDController(BaseController):
         nu_ref = reference[6:12]
 
         yaw = eta[5]
-        R_wb = self._rotation_world_to_body(yaw)
+        R_wb = world_to_body_rotation(state)
 
         prepare_time = time.perf_counter() - prepare_start
 
@@ -114,8 +114,7 @@ class PIDController(BaseController):
 
         error = np.concatenate((pos_error_body, att_error))
 
-        vel_error_world = nu_ref[0:3] - nu[0:3]
-        vel_error_body = R_wb @ vel_error_world
+        vel_error_body = -reference_velocity_error_body(state, reference)
 
         ang_vel_error = nu_ref[3:6] - nu[3:6]
         vel_error = np.concatenate((vel_error_body, ang_vel_error))

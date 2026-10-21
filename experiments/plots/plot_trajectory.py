@@ -200,7 +200,8 @@ def plot_3d_for_trajectory(traj_key, ctrl_data):
     ax.set_ylabel("Y [m]")
     ax.set_zlabel("Z [m]")
     # ax.set_title(TRAJECTORIES[traj_key])
-    ax.invert_zaxis()
+    # Keep the standard 3D z ordering: inverting it moves the x/y axes to
+    # the upper edge of the box, where ticks and labels obscure the paths.
     ax.legend(frameon=True)
     plt.tight_layout()
 
@@ -368,6 +369,7 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description="Generate spatial path-tracking figures from benchmark CSVs."
     )
+    parser.add_argument("--results-root", type=Path, default=Path("results-physics-v2"))
     parser.add_argument(
         "--scenario",
         choices=("moderate", "severe"),
@@ -395,11 +397,9 @@ def main(argv=None):
     with open("experiments/ocean_environment.yaml", "r", encoding="utf-8") as stream:
         ocean_config = yaml.safe_load(stream)
     scenario = args.scenario or ocean_config.get("default_scenario", "moderate")
-    INPUT_DIR = Path(f"results-{scenario}/trajectory_experiments")
-    OUTPUT_DIR = Path(
-        f"oceans2026/figs/results-{scenario}/plots_trajectory_experiments"
-    )
-    TABLE_DIR = Path(f"results-{scenario}/tables_trajectory_experiments")
+    INPUT_DIR = args.results_root / scenario / "trajectory_experiments"
+    OUTPUT_DIR = args.results_root / "figures" / scenario / "plots_trajectory_experiments"
+    TABLE_DIR = args.results_root / scenario / "tables_trajectory_experiments"
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     TABLE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -428,9 +428,7 @@ def main(argv=None):
             args.representative_trajectory,
             representative,
             filename="path_tracking_xy_first_repetition",
-            output_dir=Path(
-                f"oceans2026/figs/results-{scenario}/plots_path_tracking"
-            ),
+            output_dir=args.results_root / "figures" / scenario / "plots_path_tracking",
         )
 
     print("[OK] All individual trajectory plots generated.")

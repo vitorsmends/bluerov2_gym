@@ -3,12 +3,16 @@ from __future__ import annotations
 import json
 import numpy as np
 
-from dynamics import Dynamics
+try:
+    from .dynamics import Dynamics
+except ImportError:  # Direct script execution
+    from dynamics import Dynamics
 
 def main():
+    dynamics = Dynamics()
 
-    M_diag = np.diag(Dynamics.M)
-    D_lin = Dynamics.D_lin
+    M_diag = np.diag(dynamics.M)
+    D_lin = dynamics.D_lin
 
     zeta = np.array([1.2, 1.2, 1.3, 1.4, 1.4, 1.2])
     wn = np.array([0.45, 0.45, 0.50, 0.55, 0.55, 0.50])
@@ -23,7 +27,7 @@ def main():
     ki[4] = 0.0
 
     output = {
-        "dt": Dynamics.dt,
+        "dt": dynamics.dt,
         "M_diag": M_diag.tolist(),
         "D_lin": D_lin.tolist(),
         "zeta": zeta.tolist(),
@@ -31,10 +35,10 @@ def main():
         "kp": kp.tolist(),
         "ki": ki.tolist(),
         "kd": kd.tolist(),
-        "thruster_limit": Dynamics.thruster_max,
+        "thruster_limit": dynamics.thruster_max,
         "max_delta_thrust": 8.0,
         "steps_recommended": 1000,
-        "simulation_time_s": 1000 * Dynamics.dt,
+        "simulation_time_s": 1000 * dynamics.dt,
     }
 
     print(json.dumps(output, indent=4))

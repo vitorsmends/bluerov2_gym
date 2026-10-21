@@ -1,8 +1,11 @@
 from pathlib import Path
+import os
+
+RESULTS_ROOT = Path(os.environ.get("BLUEROV_RESULTS_ROOT", "results-physics-v2"))
 
 SCENARIOS = {
-    "Moderate": Path("results-moderate/trajectory_experiments"),
-    "Severe": Path("results-severe/trajectory_experiments"),
+    "Moderate": RESULTS_ROOT / "moderate/trajectory_experiments",
+    "Severe": RESULTS_ROOT / "severe/trajectory_experiments",
 }
 
 CONTROLLERS = {
@@ -12,8 +15,8 @@ CONTROLLERS = {
     "PPO":  {"prefix": "ppo_",  "color": "#59A14F"},
 }
 
-OUTPUT_DIR = Path("oceans2026/figs")
-TABLE_DIR = Path("article_tables_simple")
+OUTPUT_DIR = Path(os.environ.get("BLUEROV_FIGURES_ROOT", str(RESULTS_ROOT / "figures")))
+TABLE_DIR = RESULTS_ROOT / "tables"
 
 THRUSTER_COLUMNS = [f"T{i}" for i in range(1, 7)]
 

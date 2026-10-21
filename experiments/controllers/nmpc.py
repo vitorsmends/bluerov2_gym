@@ -289,7 +289,8 @@ class NMPCController(BaseController):
             "M",
             "W",
             "B_force",
-            "coBM",
+            "r_g",
+            "r_b",
         )
 
         missing_attributes = [
@@ -376,7 +377,11 @@ class NMPCController(BaseController):
             )
 
             reference = references[:, prediction_step]
-            error = state - reference
+            # Trajectory translational rates are inertial; state rates are body-fixed.
+            reference_body = ca.vertcat(reference[0:6],
+                ca.mtimes(self._casadi_rotation(state[:6]).T, reference[6:9]),
+                reference[9:12])
+            error = state - reference_body
 
             error = ca.vertcat(
                 error[0],
@@ -592,31 +597,23 @@ class NMPCController(BaseController):
         )
 
     def _casadi_restoring_forces(self, phi, theta):
-        weight_minus_buoyancy = (
-            float(self.dyn.W)
-            - float(self.dyn.B_force)
-        )
+        vertical_body = ca.vertcat(-ca.sin(theta),
+                                  ca.cos(theta)*ca.sin(phi),
+                                  ca.cos(theta)*ca.cos(phi))
+        gravity = -float(self.dyn.W) * vertical_body
+        buoyancy = float(self.dyn.B_force) * vertical_body
+        moment = ca.cross(ca.DM(self.dyn.r_g), gravity) + ca.cross(ca.DM(self.dyn.r_b), buoyancy)
+        return -ca.vertcat(gravity + buoyancy, moment)
 
-        center_offset = float(self.dyn.coBM)
-        weight = float(self.dyn.W)
-
-        return ca.vertcat(
-            weight_minus_buoyancy * ca.sin(theta),
-            -weight_minus_buoyancy
-            * ca.cos(theta)
-            * ca.sin(phi),
-            -weight_minus_buoyancy
-            * ca.cos(theta)
-            * ca.cos(phi),
-            center_offset
-            * weight
-            * ca.cos(theta)
-            * ca.sin(phi),
-            center_offset
-            * weight
-            * ca.sin(theta),
-            0.0,
-        )
+    @staticmethod
+    def _casadi_rotation(eta):
+        phi, theta, psi = eta[3], eta[4], eta[5]
+        c, s = ca.cos(psi), ca.sin(psi)
+        ct, st = ca.cos(theta), ca.sin(theta)
+        cp, sp = ca.cos(phi), ca.sin(phi)
+        return ca.vertcat(ca.horzcat(c*ct, c*st*sp-s*cp, c*st*cp+s*sp),
+                          ca.horzcat(s*ct, s*st*sp+c*cp, s*st*cp-c*sp),
+                          ca.horzcat(-st, ct*sp, ct*cp))
 
     @staticmethod
     def _casadi_skew(vector):
@@ -646,10 +643,10 @@ class NMPCController(BaseController):
         return ca.vertcat(
             ca.horzcat(
                 angular_skew,
-                linear_skew,
+                zero_matrix,
             ),
             ca.horzcat(
-                zero_matrix,
+                linear_skew,
                 angular_skew,
             ),
         )
@@ -710,7 +707,9 @@ class NMPCController(BaseController):
             + w * cosine_theta * cosine_phi
         )
 
-        safe_cosine_theta = cosine_theta + 1e-6
+        safe_cosine_theta = ca.if_else(ca.fabs(cosine_theta) < 1e-6,
+                                      ca.if_else(cosine_theta < 0, -1e-6, 1e-6),
+                                      cosine_theta)
 
         roll_rate = (
             p
