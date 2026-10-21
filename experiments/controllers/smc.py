@@ -7,7 +7,7 @@ import time
 import numpy as np
 
 from .base import BaseController
-from ..env_utils import wrap_angle, world_to_body_rotation, reference_velocity_error_body
+from ..env_utils import wrap_angle
 
 
 # Sliding surface gains
@@ -194,7 +194,10 @@ class SMCController(BaseController):
         solver_start = time.perf_counter()
 
         pos_error_world = eta_ref[:3] - eta[:3]
-        pos_error_body = world_to_body_rotation(state_vector) @ pos_error_world
+        pos_error_body = self._world_to_body_xyz(
+            pos_error_world,
+            yaw,
+        )
 
         attitude_error = eta_ref[3:] - eta[3:]
 
@@ -209,7 +212,16 @@ class SMCController(BaseController):
             )
         )
 
-        linear_velocity_error_body = -reference_velocity_error_body(state_vector, reference_vector)
+        linear_velocity_error_world = (
+            nu_ref[:3] - nu[:3]
+        )
+
+        linear_velocity_error_body = (
+            self._world_to_body_xyz(
+                linear_velocity_error_world,
+                yaw,
+            )
+        )
 
         angular_velocity_error = (
             nu_ref[3:] - nu[3:]

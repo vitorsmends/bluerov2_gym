@@ -233,8 +233,3 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
-
-# Corrected JONSWAP benchmark data
-!results-jonswap/**/*.csv
-
-!results-physics-v2/**/*.csv

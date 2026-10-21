@@ -188,7 +188,7 @@ class BlueRov(gym.Env):
 
     def _append_dynamics_info(self, info: dict):
         vector_keys = [
-            "tau", "tau_wave", "tau_total", "thrusters", "nu_current", "nu_current_world",
+            "tau", "tau_wave", "tau_total", "thrusters", "nu_current",
             "nu_wave_raw", "nu_rel", "nu_dot", "coriolis_rb",
             "coriolis_added", "damping", "restoring",
         ]

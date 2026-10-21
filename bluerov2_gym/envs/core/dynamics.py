@@ -30,8 +30,6 @@ class Dynamics:
         np.array([T1, T2, T3, T4, T5, T6])
     """
 
-    MODEL_VERSION = "zup-airy-coriolis-v2"
-
     def __init__(
         self,
         jonswap_params: dict | None = None,
@@ -87,17 +85,6 @@ class Dynamics:
             [self.Ixy, self.Iyy, self.Iyz],
             [self.Ixz, self.Iyz, self.Izz],
         ], dtype=float)
-        reference = inertia.get("reference", "center_of_gravity")
-        shift = -self.m * self._skew(self.r_g) @ self._skew(self.r_g)
-        if reference == "body_origin":
-            self.I_O = self.I_g.copy()
-            self.I_g = self.I_O - shift
-        elif reference == "center_of_gravity":
-            self.I_O = self.I_g + shift
-        else:
-            raise ValueError("inertia.reference must be center_of_gravity or body_origin")
-        if np.min(np.linalg.eigvalsh(self.I_g)) <= 0:
-            raise ValueError("Inertia at the center of gravity must be positive definite")
         self.M_RB = self._rigid_body_mass_matrix()
 
         hydrodynamics = cfg.get("hydrodynamics", {})
@@ -170,7 +157,7 @@ class Dynamics:
         S_rg = self._skew(self.r_g)
 
         upper = np.hstack((self.m * I3, -self.m * S_rg))
-        lower = np.hstack((self.m * S_rg, self.I_O))
+        lower = np.hstack((self.m * S_rg, self.I_g))
 
         return np.vstack((upper, lower))
 
@@ -181,8 +168,8 @@ class Dynamics:
         S_v = self._skew(v)
         S_w = self._skew(omega)
 
-        upper = np.hstack((S_w, np.zeros((3, 3))))
-        lower = np.hstack((S_v, S_w))
+        upper = np.hstack((S_w, S_v))
+        lower = np.hstack((np.zeros((3, 3)), S_w))
 
         return np.vstack((upper, lower))
 
@@ -256,12 +243,6 @@ class Dynamics:
         self.Tp = float(Tp)
         self.gamma = float(gamma)
         self.N = int(N)
-        if not np.isfinite(self.Hs) or self.Hs < 0:
-            raise ValueError("Hs must be finite and non-negative.")
-        if not np.isfinite(self.Tp) or self.Tp <= 0 or self.N < 1:
-            raise ValueError("Tp must be finite and positive, and N >= 1.")
-        if not np.isfinite(self.gamma) or not 1 <= self.gamma <= 7:
-            raise ValueError("JONSWAP gamma must be between 1 and 7.")
 
         self.wave_dir = np.array(wave_dir, dtype=float)
 
@@ -315,11 +296,6 @@ class Dynamics:
 
         wp = 2.0 * np.pi / self.Tp
         dw = 3.0 * wp / self.N
-        # Fossen MSS waveSpectrum, case 7 (JONSWAP with DNV correction).
-        # Hs determines spectral energy; alpha_js is retained only for legacy
-        # configuration compatibility and is not an independent scale here.
-        self.alpha_js = (5.0 / 16.0) * self.Hs**2 * wp**4 / self.g**2
-        conversion_factor = 1.0 - 0.287 * np.log(self.gamma)
 
         self._waves = []
 
@@ -333,7 +309,7 @@ class Dynamics:
             )
 
             S = (
-                conversion_factor * self.alpha_js
+                self.alpha_js
                 * self.g**2
                 * omega**-5
                 * np.exp(-1.25 * (wp / omega) ** 4)
@@ -405,7 +381,7 @@ class Dynamics:
 
         return tau_wave
 
-    def _jonswap_disturbance(self, eta=None):
+    def _jonswap_disturbance(self):
         """
         Computes:
             eta_wave
@@ -434,9 +410,8 @@ class Dynamics:
             spatial_phase = k * (x * np.cos(theta) + y * np.sin(theta))
             arg = spatial_phase - omega * self._t + phase
 
-            # Airy velocities for elevation amplitude A, finite water depth.
-            cosh_ratio = np.cosh(k * (z + d)) / np.sinh(k * d)
-            sinh_ratio = np.sinh(k * (z + d)) / np.sinh(k * d)
+            cosh_ratio = np.cosh(k * (z + d)) / np.cosh(k * d)
+            sinh_ratio = np.sinh(k * (z + d)) / np.cosh(k * d)
 
             eta_wave += A * np.cos(arg)
 
@@ -466,17 +441,13 @@ class Dynamics:
             + self.alpha_wave * nu_c_raw
         )
 
-        # Noise, scaling and filtering are defined in the inertial z-up frame.
-        # Transform before body-frame drag and empirical body-frame wave loads.
-        rotation = np.eye(3) if eta is None else self.body_to_world_rotation(eta)
-        nu_c_body = rotation.T @ self._nu_c_filt
-        tau_wave = self._compute_wave_force(nu_c_body)
+        tau_wave = self._compute_wave_force(self._nu_c_filt)
 
         self._last_eta_wave = float(eta_wave)
         self._last_nu_wave_raw = nu_wave.copy()
         self._last_tau_wave = tau_wave.copy()
 
-        return nu_c_body, tau_wave.copy()
+        return self._nu_c_filt.copy(), tau_wave.copy()
 
     # ============================================================
     # Forces and kinematics
@@ -497,26 +468,21 @@ class Dynamics:
         return tau, thrust
 
     def _restoring_forces(self, phi, theta):
-        # g is on the left of the dynamic equation, hence minus the applied
-        # gravity/buoyancy wrench. Both inertial and body frames are z-up.
-        vertical_body = np.array([-np.sin(theta),
-                                  np.cos(theta) * np.sin(phi),
-                                  np.cos(theta) * np.cos(phi)])
-        gravity = -self.W * vertical_body
-        buoyancy = self.B_force * vertical_body
-        moment = np.cross(self.r_g, gravity) + np.cross(self.r_b, buoyancy)
-        return -np.r_[gravity + buoyancy, moment]
+        weight_minus_buoyancy = self.W - self.B_force
 
-    @staticmethod
-    def body_to_world_rotation(eta):
-        """Right-handed Rz(yaw) Ry(pitch) Rx(roll); world and body z point up."""
-        phi, theta, psi = np.asarray(eta)[3:6]
-        c, s = np.cos(psi), np.sin(psi)
-        ct, st = np.cos(theta), np.sin(theta)
-        cp, sp = np.cos(phi), np.sin(phi)
-        return np.array([[c*ct, c*st*sp-s*cp, c*st*cp+s*sp],
-                         [s*ct, s*st*sp+c*cp, s*st*cp-c*sp],
-                         [-st, ct*sp, ct*cp]])
+        g_eta = np.array(
+            [
+                weight_minus_buoyancy * np.sin(theta),
+                -weight_minus_buoyancy * np.cos(theta) * np.sin(phi),
+                -weight_minus_buoyancy * np.cos(theta) * np.cos(phi),
+                self.coBM * self.W * np.cos(theta) * np.sin(phi),
+                self.coBM * self.W * np.sin(theta),
+                0.0,
+            ],
+            dtype=float,
+        )
+
+        return g_eta
 
     def _body_to_world_kinematics(self, eta, nu):
         phi, theta, psi = eta[3], eta[4], eta[5]
@@ -569,6 +535,8 @@ class Dynamics:
     # ============================================================
 
     def step(self, state, action):
+        nu_c, tau_wave = self._jonswap_disturbance()
+
         eta = np.array(
             [
                 state["x"],
@@ -594,7 +562,6 @@ class Dynamics:
         )
 
         phi, theta = eta[3], eta[4]
-        nu_c, tau_wave = self._jonswap_disturbance(eta)
 
         tau, saturated_thrust = self._thrusters_to_tau(action)
 
@@ -640,7 +607,6 @@ class Dynamics:
 
         state["wave_elevation"] = float(self._last_eta_wave)
         state["nu_current"] = nu_c.copy()
-        state["nu_current_world"] = self._nu_c_filt.copy()
         state["nu_wave_raw"] = self._last_nu_wave_raw.copy()
         state["nu_rel"] = nu_rel.copy()
         state["nu_dot"] = nu_dot.copy()

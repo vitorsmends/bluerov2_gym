@@ -2,13 +2,13 @@ experiment:
   mode: trajectory_suite
   dt: 0.1
   steps: 1000
-  repetitions: 1
+  repetitions: 5
   seed: 42
   thrust_limit: 40.0
   render_mode: null
 
 output:
-  directory_template: results-physics-v2/{scenario}/trajectory_experiments
+  directory_template: results-{scenario}/trajectory_experiments
 
 controllers:
   - name: pid
@@ -25,8 +25,8 @@ controllers:
   - name: ppo
     enabled: true
     params:
-      model_path: ppo_trajectory_final.zip
-      vecnormalize_path: vec_normalize.pkl
+      model_path: bluerov_ppo_curriculum
+      vecnormalize_path: bluerov_vec_normalize_curriculum.pkl
       env_config_path: config/blue_rov_config.yaml
       dynamics_config_path: config/dynamics_config.yaml
 
