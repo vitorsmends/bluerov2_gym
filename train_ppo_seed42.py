@@ -25,6 +25,7 @@ def verify_reference_environment():
         "Python": ("3.10", ".".join(map(str, sys.version_info[:2]))),
         "NumPy": ("2.2.6", numpy.__version__),
         "SciPy": ("1.15.3", scipy.__version__),
+        "PyYAML": ("6.0.2", yaml.__version__),
         "Gymnasium": ("1.2.3", gymnasium.__version__),
         "Stable-Baselines3": ("2.8.0", stable_baselines3.__version__),
         "Torch": ("2.11.0", torch.__version__.split("+")[0]),
