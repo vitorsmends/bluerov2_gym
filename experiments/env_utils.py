@@ -58,6 +58,23 @@ def wrap_angle(angle: float) -> float:
     return float(np.arctan2(np.sin(angle), np.cos(angle)))
 
 
+def world_to_body_rotation(state: np.ndarray) -> np.ndarray:
+    """Return the rotation matrix that maps world-frame vectors to body axes."""
+    from bluerov2_gym.envs.core.dynamics import Dynamics
+
+    return Dynamics.body_to_world_rotation(np.asarray(state)[:6]).T
+
+
+def reference_velocity_error_body(
+    state: np.ndarray,
+    reference: np.ndarray,
+) -> np.ndarray:
+    """Return vehicle minus reference linear velocity in current body axes."""
+    state = np.asarray(state)
+    reference = np.asarray(reference)
+    return state[6:9] - world_to_body_rotation(state) @ reference[6:9]
+
+
 def tracking_errors(state: np.ndarray, reference: np.ndarray) -> dict:
     """Compute core path-tracking errors."""
     position_error = state[0:3] - reference[0:3]

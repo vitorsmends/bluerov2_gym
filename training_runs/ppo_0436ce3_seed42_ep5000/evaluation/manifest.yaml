@@ -1,0 +1,231 @@
+dynamics_version: zup-airy-coriolis-v2
+coordinate_convention: right-handed z-up (world and body)
+physical_config:
+  dt: 0.1
+  rho: 1000.0
+  g: 9.81
+  vehicle:
+    base_mass: 14.8
+    prop_mass: 0.07
+    n_thrusters: 6
+    dimensions:
+      x: 0.4
+      y: 0.25
+      z: 0.1
+    inertia:
+      reference: center_of_gravity
+      Ixx: 5.2539
+      Ixy: 0.0144
+      Ixz: 0.3341
+      Iyy: 7.942
+      Iyz: 0.026
+      Izz: 6.9123
+  buoyancy:
+    correction_factor: 1.01
+  hydrodynamics:
+    added_mass:
+    - 5.5
+    - 12.7
+    - 14.57
+    - 0.12
+    - 0.12
+    - 0.12
+    linear_damping:
+    - 25.15
+    - 7.364
+    - 17.955
+    - 10.888
+    - 20.761
+    - 3.744
+    quadratic_damping:
+    - 17.77
+    - 125.9
+    - 72.36
+    - 0.1246
+    - 0.1246
+    - 0.1857
+  thrusters:
+    min: -40.0
+    max: 40.0
+    allocation_matrix:
+    - - 0.70710678
+      - 0.70710678
+      - 0.70710678
+      - 0.70710678
+      - 0.0
+      - 0.0
+    - - 0.70710678
+      - -0.70710678
+      - -0.70710678
+      - 0.70710678
+      - 0.0
+      - 0.0
+    - - 0.0
+      - 0.0
+      - 0.0
+      - 0.0
+      - 1.0
+      - -1.0
+    - - 0.05126524
+      - -0.05126524
+      - -0.05126524
+      - 0.05126524
+      - -0.1105
+      - -0.1105
+    - - -0.05126524
+      - -0.05126524
+      - -0.05126524
+      - -0.05126524
+      - -0.0025
+      - 0.0025
+    - - 0.16652365
+      - -0.16652365
+      - 0.17500893
+      - -0.17500893
+      - 0.0
+      - 0.0
+  jonswap:
+    Hs: 2.0
+    Tp: 12.0
+    gamma: 3.3
+    N: 64
+    wave_dir:
+    - 0.5
+    - 0.5
+    directional_spread_deg: 25.0
+    water_depth: 30.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -2.0
+    scale: 0.5
+    max_current: 0.7
+    alpha_wave: 0.02
+    noise_std: 0.01
+    alpha_noise: 0.3
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain:
+    - 35.0
+    - 35.0
+    - 50.0
+    wave_force_application_point:
+    - 0.0
+    - 0.0
+    - 0.05
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
+    seed: 42
+spectrum: Fossen MSS JONSWAP case 7, DNV correction
+artifacts:
+  model:
+    path: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_0436ce3_seed42_ep5000/models/bluerov_ppo_physics_v2_seed_42.zip
+    sha256: 29366f16b755069920bd4ab678dd0451dbbe61c15ec36ddb5dde6beac4eb0b20
+  vecnormalize:
+    path: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_0436ce3_seed42_ep5000/models/bluerov_vecnormalize_physics_v2_seed_42.pkl
+    sha256: 7f90130d7c8cd6c96d9c65ebb28365938e0715dd5882c60ea36ca4d27ca9bd90
+config:
+  experiment:
+    mode: trajectory_suite
+    dt: 0.1
+    steps: 1000
+    repetitions: 1
+    seed: 42
+    thrust_limit: 40.0
+    render_mode: null
+  output:
+    directory_template: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_0436ce3_seed42_ep5000/evaluation/{scenario}/trajectory_experiments
+  controllers:
+  - name: pid
+    enabled: true
+    params: {}
+  - name: smc
+    enabled: true
+    params: {}
+  - name: nmpc
+    enabled: true
+    params:
+      horizon: 10
+      control_blocks: 5
+  - name: ppo
+    enabled: true
+    params:
+      model_path: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_0436ce3_seed42_ep5000/models/bluerov_ppo_physics_v2_seed_42.zip
+      vecnormalize_path: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_0436ce3_seed42_ep5000/models/bluerov_vecnormalize_physics_v2_seed_42.pkl
+      env_config_path: config/blue_rov_config.yaml
+      dynamics_config_path: config/dynamics_config.yaml
+  disturbance:
+    config_path: /Users/mendes/Github/bluerov2_gym/experiments/ocean_environment.yaml
+    scenario_names:
+    - moderate
+    - severe
+  trajectories:
+  - name: circle
+  - name: square
+  - name: figure_eight_depth
+  - name: letter_b
+  - name: star
+reused_results:
+  source: /Users/mendes/Github/bluerov2_gym/training_runs/ppo_physics_v2_seed42/evaluation
+  files:
+  - file: moderate/trajectory_experiments/pid_circle.csv
+    sha256: 155aa3482d39130f822e07e73d809174d24b6eb5a305067f2ee64b35dadceb06
+  - file: moderate/trajectory_experiments/pid_square.csv
+    sha256: e3267d81bd8439a98b4985192f0bd6cfafba3557eeef447203545392737ca582
+  - file: moderate/trajectory_experiments/pid_figure_eight_depth.csv
+    sha256: ce4e3a55ae1e359f0672324d32be515bda0d39a3279c540a638981e06f47046c
+  - file: moderate/trajectory_experiments/pid_letter_b.csv
+    sha256: b9e413de32cd687d79ab92ccbca36e8724f3d76afb6d0e41ebacc0fb4c654b2f
+  - file: moderate/trajectory_experiments/pid_star.csv
+    sha256: e4869def68305a6cd552ab24d9cdeee2e5a706922163064e523ea6322fdaf4ce
+  - file: severe/trajectory_experiments/pid_circle.csv
+    sha256: f52d94aa20b946a1fcdeb48edf39fc9b13f5c15b2b65cf8184164bc26ceda601
+  - file: severe/trajectory_experiments/pid_square.csv
+    sha256: f82868a7fc888bdd19ff1f8812a08c05e69ef36a21abda7e1db84180c76b3cef
+  - file: severe/trajectory_experiments/pid_figure_eight_depth.csv
+    sha256: d69dfbef8bd7bcbeff7f38a9b114052ac020be7a510884f0faec48c319b0ed39
+  - file: severe/trajectory_experiments/pid_letter_b.csv
+    sha256: 5a72c26ea4a97d3a1cf5849aa45812fefcf010ee7a10e2443f059e006742664d
+  - file: severe/trajectory_experiments/pid_star.csv
+    sha256: 6003768ba9d36aa8c9f88209fc4602b54c890f6e0dfcf45c5054a8ec8b374819
+  - file: moderate/trajectory_experiments/smc_circle.csv
+    sha256: 4addf25b2b93b6a017e0a60ba5df900b7b0fa81868477c0d8c529c3e199e5e42
+  - file: moderate/trajectory_experiments/smc_square.csv
+    sha256: b6898a795caa5899c885a35c949a57539054e4dd04c0cf23e8212004f44d0318
+  - file: moderate/trajectory_experiments/smc_figure_eight_depth.csv
+    sha256: 5c1136644a3b4113ba3f0d017791d1e1280aa5d39efbd718280d08bee1ffef86
+  - file: moderate/trajectory_experiments/smc_letter_b.csv
+    sha256: 1984a7a9e747cd2bbaba3b150e42aab77c33f99c3eb89102c339a085a1fb86d9
+  - file: moderate/trajectory_experiments/smc_star.csv
+    sha256: 7d64ab5b6628e0e0a63a6f4af365ef84c1f8479d25432355fefcaf44395c9065
+  - file: severe/trajectory_experiments/smc_circle.csv
+    sha256: 6621da704e11f1782a174391bc591d20cb2438643c45d08cce5db3d8cbba19c2
+  - file: severe/trajectory_experiments/smc_square.csv
+    sha256: efe8565bc95f0f2203c14cc96dc43b9ebe56a853bb877b45a0ef42b30fc97ddc
+  - file: severe/trajectory_experiments/smc_figure_eight_depth.csv
+    sha256: 34658db291eab57f785173f95ed7b62ddd07c1f0673967a657d16e2062250dfc
+  - file: severe/trajectory_experiments/smc_letter_b.csv
+    sha256: c3c6a76e9130067fc6ff8396cc54781405cfdac101a7cfd128b270959fc73664
+  - file: severe/trajectory_experiments/smc_star.csv
+    sha256: 40ca1e6df44fc993d5a8fa9880e5ac72227df6b2f617d750a2d1a3c609f40739
+  - file: moderate/trajectory_experiments/nmpc_circle.csv
+    sha256: 9a6d957f1508132dacd53285ed8e657a048d1e39cdfdf0af7cbaf498a937803e
+  - file: moderate/trajectory_experiments/nmpc_square.csv
+    sha256: 447ebb821ab489ba62ff4207d0d9c3b55b62dc18d17d8cc04342f2183cee1227
+  - file: moderate/trajectory_experiments/nmpc_figure_eight_depth.csv
+    sha256: f461e02c46d204c4495c01c96661233b4df2065419c988f745649b168dec2e4a
+  - file: moderate/trajectory_experiments/nmpc_letter_b.csv
+    sha256: 38ee99e921316bb4b5da1e3da2e553450062802172e2be37114fc73155cb0a86
+  - file: moderate/trajectory_experiments/nmpc_star.csv
+    sha256: 2ebd3cfefe9aefc09626f1171ce6ac6bd2aee04c5e95fec8c4d2172941dc6603
+  - file: severe/trajectory_experiments/nmpc_circle.csv
+    sha256: a2ccae153b890b43f5888626eea5cca6115b36fd65d847b43456582187baad77
+  - file: severe/trajectory_experiments/nmpc_square.csv
+    sha256: eea95a37d6b6d3e047a87222a1fb972a7f51b6a7688b2a7af73671e3f16abd3f
+  - file: severe/trajectory_experiments/nmpc_figure_eight_depth.csv
+    sha256: d33d9e1560b36918ec22a44e3d02cc4b98fcf7efd7114aed24138bfcb878c46a
+  - file: severe/trajectory_experiments/nmpc_letter_b.csv
+    sha256: b6982b9eb4dd9a82b5e33e5e63534ffca16e4acb991be0c924735d8ac1c92683
+  - file: severe/trajectory_experiments/nmpc_star.csv
+    sha256: 8556573cafd8b0e9edc7b4c191db2c22994752d66c7ac37e1dd88e6f5077ce77
+  simulated_controllers:
+  - ppo
