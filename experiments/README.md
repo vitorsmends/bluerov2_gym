@@ -1,17 +1,21 @@
 # Comparação dos controladores: moderate e severe
 
-## Retreinar a política do commit 0436ce3 (seed 42)
+## Retreinar o pipeline validado do commit 26857c4 na Physics 2 (seed 42)
 
 ```bash
 .venv/bin/python train_ppo_seed42.py
 ```
 
-Usa a configuração original de `0436ce3482e95105cb2376681b2bd6cbec72d99c`,
-preservada em `config/training_0436ce3.yaml`, com a dinâmica atual corrigida.
-Treina do zero, com normalizador novo, currículo completo de cinco etapas e
-orçamento nominal de 3 milhões de passos. O limite efetivo dos episódios é
-1000. Modelo, normalizador, configuração e TensorBoard ficam separados em
-`training_runs/ppo_0436ce3_seed42/`; artefatos anteriores são preservados.
+Restaura o treinamento e a interface PPO de
+`26857c4456e11c6173b04678b21b6806d77b5b4c`: mesma rede, recompensa,
+normalização, hiperparâmetros, currículo, transições entre estágios e
+observação usada na avaliação. A única diferença funcional intencional é a
+dinâmica Physics 2 carregada de `config/dynamics_config.yaml`. O limite efetivo
+permanece em 5000 passos e o orçamento é de 3 milhões. Os arquivos são salvos
+separadamente em `training_runs/ppo_26857_physics2_seed42/`.
+O script também exige as versões do ambiente do modelo validado, registradas em
+`requirements-ppo-reference.txt`, para evitar alterar o PPO por atualização de
+Python, Gymnasium, Stable-Baselines3, Torch, NumPy ou SciPy.
 
 
 Para treinar e, ao terminar, executar a comparação dos quatro controladores
@@ -35,7 +39,7 @@ PPO e gera gráficos e tabelas com os quatro controladores. Preserva os dados
 originais e registra os hashes dos arquivos reutilizados no manifesto.
 
 Se já existir uma execução nessa pasta, escolha outro destino com
-`--output-dir training_runs/ppo_physics_v2_seed42_run2`.
+`--output-dir training_runs/ppo_26857_physics2_seed42_run2`.
 `--smoke-test` executa apenas 320 passos para verificar o pipeline e salva em
 uma subpasta `smoke_test/`; esse modo não constitui um treinamento utilizável.
 

@@ -1,0 +1,9 @@
+# Environment recorded by the validated seed-42 PPO artifact.
+# Use Python 3.10 (the artifact records Python 3.10.12).
+numpy==2.2.6
+scipy==1.15.3
+gymnasium==1.2.3
+stable-baselines3[extra]==2.8.0
+# Install the CUDA build appropriate for the training machine. The validated
+# artifact records torch 2.11.0+cu128.
+torch==2.11.0
