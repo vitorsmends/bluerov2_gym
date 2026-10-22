@@ -3,6 +3,7 @@
 numpy==2.2.6
 scipy==1.15.3
 PyYAML==6.0.2
+meshcat==0.3.2
 gymnasium==1.2.3
 stable-baselines3[extra]==2.8.0
 # Install the CUDA build appropriate for the training machine. The validated
