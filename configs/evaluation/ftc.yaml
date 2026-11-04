@@ -6,7 +6,7 @@ experiment:
   thrust_limit: 40.0
   render_mode: null
 output:
-  directory: results-moderate/trajectory_ftc
+  directory: artifacts/evaluation/imported/results-moderate/trajectory_ftc
 controllers:
 - name: pid
   enabled: true
@@ -14,8 +14,8 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    model_path: ../../models_ftc/bluerov_ppo_ftc_severe.zip
-    vecnormalize_path: ../../models_ftc/bluerov_ftc_severe_vecnormalize.pkl
+    model_path: ../../artifacts/models/ftc/bluerov_ppo_ftc_severe.zip
+    vecnormalize_path: ../../artifacts/models/ftc/bluerov_ftc_severe_vecnormalize.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml
     dynamics_config_path: ../dynamics/dynamics_config.yaml
 - name: smc

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ..paths import TENSORBOARD_LOGS, CURRICULUM_MODELS, artifact_path
 
 import argparse
 import os
@@ -38,8 +39,8 @@ DEFAULT_CONFIG = {
         "dynamics_config": {},
     },
     "paths": {
-        "tensorboard_log": "./bluerov_tensorboard/",
-        "model_dir": "./models/",
+        "tensorboard_log": str(TENSORBOARD_LOGS),
+        "model_dir": str(CURRICULUM_MODELS),
         "model_name": "bluerov_ppo_curriculum",
         "vecnormalize_name": "bluerov_vec_normalize_curriculum.pkl",
     },

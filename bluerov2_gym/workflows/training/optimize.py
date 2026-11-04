@@ -1,3 +1,4 @@
+from ..paths import TENSORBOARD_LOGS, CURRICULUM_MODELS, artifact_path
 import gc
 import logging
 import os
@@ -19,9 +20,9 @@ from tqdm.auto import tqdm
 
 ENV_ID = "BlueRov-v0"
 
-LOG_DIR = "./bluerov_tensorboard/"
-MODEL_DIR = "./models/"
-OPTUNA_DIR = "./optuna_results/"
+LOG_DIR = str(TENSORBOARD_LOGS)
+MODEL_DIR = str(CURRICULUM_MODELS)
+OPTUNA_DIR = str(artifact_path("optimization"))
 
 OPTUNA_DB_PATH = os.path.join(OPTUNA_DIR, "ppo_bluerov_optuna.db")
 OPTUNA_LOG_PATH = os.path.join(OPTUNA_DIR, "optuna_training.log")

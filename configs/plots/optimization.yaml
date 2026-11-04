@@ -1,3 +1,3 @@
 suite: optimization
-database: ../../optuna_results/ppo_bluerov_optuna.db
-output_dir: ../../runs/plots/optimization
+database: ../../artifacts/optimization/imported/ppo_bluerov_optuna.db
+output_dir: ../../artifacts/plots/optimization

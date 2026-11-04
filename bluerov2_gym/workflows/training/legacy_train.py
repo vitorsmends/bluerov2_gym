@@ -1,3 +1,4 @@
+from ..paths import TENSORBOARD_LOGS, CURRICULUM_MODELS, artifact_path
 import os
 
 import gymnasium as gym
@@ -14,8 +15,8 @@ from tqdm.auto import tqdm
 
 ENV_ID = "BlueRov-v0"
 
-LOG_DIR = "./bluerov_tensorboard/"
-MODEL_DIR = "./models/"
+LOG_DIR = str(TENSORBOARD_LOGS)
+MODEL_DIR = str(CURRICULUM_MODELS)
 MODEL_PATH = os.path.join(MODEL_DIR, "bluerov_ppo")
 VECNORM_PATH = os.path.join(MODEL_DIR, "bluerov_vec_normalize.pkl")
 

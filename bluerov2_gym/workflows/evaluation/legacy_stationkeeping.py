@@ -1,3 +1,4 @@
+from ..paths import CURRENT_MODELS, artifact_path
 import csv
 import time
 import numpy as np
@@ -110,9 +111,9 @@ def run_ppo_stationkeeping():
     env = gym.make("BlueRov-v0", render_mode=None)
 
     try:
-        model = PPO.load("bluerov_ppo.zip")
+        model = PPO.load(str(CURRENT_MODELS/"bluerov_ppo.zip"))
         venv = DummyVecEnv([lambda: gym.make("BlueRov-v0", render_mode=None)])
-        venv = VecNormalize.load("bluerov_vec_normalize.pkl", venv)
+        venv = VecNormalize.load(str(CURRENT_MODELS/"bluerov_vec_normalize.pkl"), venv)
         venv.training = False
         venv.norm_reward = False
     except FileNotFoundError as e:
@@ -241,7 +242,9 @@ def run_ppo_stationkeeping():
         plt.tight_layout()
         plt.show()
 
-    with open("data_ppo_stationkeeping.csv", "w", newline="") as f:
+    output=artifact_path("evaluation","legacy_stationkeeping","data_ppo_stationkeeping.csv")
+    output.parent.mkdir(parents=True,exist_ok=True)
+    with open(output, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(build_header())
         writer.writerows(data)

@@ -1,4 +1,5 @@
 """Create exclusive run directories and record resolved inputs."""
+from .paths import artifact_path
 from datetime import datetime
 import hashlib
 import importlib.metadata
@@ -14,9 +15,9 @@ def write_yaml(path, value):
 
 def create_run(kind, requested, resolved, output=None):
     stamp=datetime.now(ZoneInfo('America/Bahia')).strftime('%Y%m%d-%H%M%S-%f')
-    run=Path(output or Path('runs')/kind/stamp).expanduser().resolve()
+    run=Path(output or artifact_path(kind,stamp)).expanduser().resolve()
     run.mkdir(parents=True,exist_ok=False)
-    for name in ['data','figures','tables','logs']: (run/name).mkdir()
+    (run/'logs').mkdir()  # Data, models, figures and tables are created on demand.
     write_yaml(run/'config.requested.yaml',requested)
     write_yaml(run/'config.resolved.yaml',resolved)
     repo=Path(__file__).resolve().parents[2]

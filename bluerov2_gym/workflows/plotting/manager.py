@@ -1,4 +1,5 @@
 """Organize unchanged plotting routines, using saved data only."""
+from ..paths import artifact_path
 import csv
 import json
 import os
@@ -22,7 +23,7 @@ class PlotManager:
             self.logs=self.run/'logs'
         else:
             self.resolved={}
-            self.output=Path(self.config.get('output_dir','figures')).resolve()
+            self.output=Path(self.config.get('output_dir',artifact_path('figures','manual'))).resolve()
             self.tables=Path(self.config.get('table_dir',self.output/'tables')).resolve()
             self.logs=self.output/'logs'
 

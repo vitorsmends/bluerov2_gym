@@ -7,7 +7,7 @@ experiment:
   thrust_limit: 40.0
   render_mode: null
 output:
-  directory_template: results-{scenario}/trajectory_experiments
+  directory_template: artifacts/evaluation/imported/results-{scenario}/trajectory_experiments
 controllers:
 - name: pid
   enabled: true
@@ -23,8 +23,8 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    model_path: ../../models/bluerov_ppo_curriculum.zip
-    vecnormalize_path: ../../models/bluerov_vec_normalize_curriculum.pkl
+    model_path: ../../artifacts/models/curriculum/bluerov_ppo_curriculum.zip
+    vecnormalize_path: ../../artifacts/models/curriculum/bluerov_vec_normalize_curriculum.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml
     dynamics_config_path: ../dynamics/dynamics_config.yaml
 disturbance:

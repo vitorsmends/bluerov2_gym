@@ -1,9 +1,10 @@
+from ...paths import IMPORTED_RESULTS, artifact_path
 from pathlib import Path
 from ..paths import ROOT
 
 SCENARIOS = {
-    "Moderate": ROOT / Path("results-moderate/trajectory_experiments"),
-    "Severe": ROOT / Path("results-severe/trajectory_experiments"),
+    "Moderate": IMPORTED_RESULTS / Path("results-moderate/trajectory_experiments"),
+    "Severe": IMPORTED_RESULTS / Path("results-severe/trajectory_experiments"),
 }
 
 CONTROLLERS = {
@@ -13,8 +14,8 @@ CONTROLLERS = {
     "PPO":  {"prefix": "ppo_",  "color": "#59A14F"},
 }
 
-OUTPUT_DIR = ROOT / Path("oceans2026/figs")
-TABLE_DIR = ROOT / Path("article_tables_simple")
+OUTPUT_DIR = artifact_path("figures","article")
+TABLE_DIR = artifact_path("tables","article")
 
 THRUSTER_COLUMNS = [f"T{i}" for i in range(1, 7)]
 

@@ -6,7 +6,7 @@ experiment:
   thrust_limit: 40.0
   render_mode: null
 output:
-  directory: results-severe/trajectory_experiments
+  directory: artifacts/evaluation/imported/results-severe/trajectory_experiments
 environment:
   dynamics_config:
     disturbance_model:
@@ -18,8 +18,8 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    model_path: ../../ppo_trajectory_final.zip
-    vecnormalize_path: ../../vec_normalize.pkl
+    model_path: ../../artifacts/models/current/ppo_trajectory_final.zip
+    vecnormalize_path: ../../artifacts/models/current/vec_normalize.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml
     dynamics_config_path: ../dynamics/dynamics_config.yaml
 - name: smc

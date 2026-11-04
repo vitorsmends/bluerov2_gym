@@ -16,8 +16,8 @@ organização das saídas, sem lançar avaliação ao final.
 
 Cada seed recebe uma execução exclusiva com `models/`, `logs/tensorboard/`,
 `logs/training.log`, configurações solicitada/efetiva e `manifest.yaml`.
-Com `--output runs/training/estudo --seeds 42 43`, as pastas serão
-`runs/training/estudo/seed_42` e `seed_43`. Os arquivos de modelo mantêm seus
+Com `--output artifacts/training/estudo --seeds 42 43`, as pastas serão
+`artifacts/training/estudo/seed_42` e `seed_43`. Os arquivos de modelo mantêm seus
 nomes anteriores, incluindo sufixos por seed quando solicitados.
 
 O manifesto registra commit, estado local do Git, versões e seed. O manifesto
@@ -27,7 +27,7 @@ as flags efetivas da dinâmica. Nenhum modelo antigo é movido.
 ## Curvas
 
 ```bash
-bluerov plot-training --run runs/training/SEU_RUN
+bluerov plot-training --run artifacts/training/SEU_RUN
 ```
 
 Para TensorBoard histórico, edite `configs/plots/training.yaml` e execute:
@@ -41,8 +41,8 @@ pelo menos cinco treinamentos independentes, com os padrões já suportados:
 
 ```yaml
 suite: training
-log_dir: ../../bluerov_tensorboard
-output_dir: ../../runs/plots/comparacao_treinos
+log_dir: ../../artifacts/logs/tensorboard
+output_dir: ../../artifacts/plots/comparacao_treinos
 min_seeds: 5
 groups:
   - baseline=PPO_BlueROV2_Curriculum_seed_*

@@ -26,7 +26,7 @@ bluerov train --config configs/training/curriculum.yaml --seeds 42 43 44 45 46
 ```
 
 Cada treinamento salva seus modelos, VecNormalize, checkpoints e TensorBoard
-em uma pasta própria sob `runs/training/`. [Guia de treinamento](docs/training.md).
+em uma pasta própria sob `artifacts/training/`. [Guia de treinamento](docs/training.md).
 
 ## Avaliar o agente atual em um setpoint
 
@@ -35,12 +35,13 @@ bluerov inspect --config configs/evaluation/stationkeeping_single.yaml
 bluerov evaluate --config configs/evaluation/stationkeeping_single.yaml
 ```
 
-Essa configuração usa `bluerov_ppo.zip` e `bluerov_vec_normalize.pkl` da raiz,
+Essa configuração usa `bluerov_ppo.zip` e `bluerov_vec_normalize.pkl` de
+`artifacts/models/current/`,
 setpoint `(0, 0, -2 m)`, 100 segundos e mecânica corrigida. Não retreina o agente.
 O comando imprime o diretório da execução. Gere os gráficos a partir dele:
 
 ```bash
-bluerov plot --run runs/evaluation/SEU_RUN --suite single_policy
+bluerov plot --run artifacts/evaluation/SEU_RUN --suite single_policy
 ```
 
 ## Comparar controladores
@@ -48,8 +49,8 @@ bluerov plot --run runs/evaluation/SEU_RUN --suite single_policy
 ```bash
 bluerov inspect --config configs/evaluation/trajectory_comparison.yaml
 bluerov evaluate --config configs/evaluation/trajectory_comparison.yaml
-bluerov plot --run runs/evaluation/SEU_RUN --suite trajectories
-bluerov plot --run runs/evaluation/SEU_RUN --suite article
+bluerov plot --run artifacts/evaluation/SEU_RUN --suite trajectories
+bluerov plot --run artifacts/evaluation/SEU_RUN --suite article
 ```
 
 A lista `controllers` no YAML define os controladores da avaliação. Use
@@ -81,8 +82,8 @@ bluerov plot-training --config configs/plots/training.yaml
 
 As rotinas de desenho e cálculo foram preservadas. A classe `PlotManager`
 organiza as suites e seus caminhos; cada família mantém suas métricas e estilos.
-As entradas antigas de scripts foram removidas. Resultados históricos continuam
-nos diretórios originais. Novas execuções não
+As entradas antigas de scripts foram removidas. Resultados históricos foram
+centralizados em `artifacts/`, preservando seu conteúdo. Novas execuções não
 sobrescrevem automaticamente figuras de `oceans2026/figs`.
 
 ## Organização
@@ -96,7 +97,7 @@ bluerov2_gym/
     evaluation/            # runner, controladores, referências e trajetórias
     plotting/              # PlotManager e famílias de figuras
 configs/                   # configuração principal, agrupada por tarefa
-runs/                      # novas execuções; dados locais, ignorados pelo Git
+artifacts/                 # modelos, treinos, avaliações, logs, figuras e tabelas
 control_design/            # projetos de controle e seu modelo próprio
 scripts/                   # auditoria física específica
 ```
@@ -124,3 +125,6 @@ python -m unittest discover -s tests -v
 ```
 
 Licença MIT.
+
+Os dados antes espalhados na raiz foram movidos para `artifacts/`. Veja o
+[mapa de dados](DATA.md) para localizar modelos, logs e resultados históricos.

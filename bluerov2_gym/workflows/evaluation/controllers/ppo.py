@@ -1,6 +1,7 @@
 """PPO controller for BlueROV2 path tracking."""
 
 from __future__ import annotations
+from ...paths import CURRENT_MODELS, CURRICULUM_MODELS
 
 import os
 import time
@@ -76,10 +77,12 @@ class PPOController(BaseController):
     @staticmethod
     def _resolve_file(path: str) -> Path:
         candidates = [
+            CURRENT_MODELS / path,
+            CURRENT_MODELS / (path + ".zip" if not path.endswith(".zip") else path),
             Path(path),
             Path(path + ".zip") if not path.endswith(".zip") else Path(path),
-            Path("models") / path,
-            Path("models") / (path + ".zip" if not path.endswith(".zip") else path),
+            CURRICULUM_MODELS / path,
+            CURRICULUM_MODELS / (path + ".zip" if not path.endswith(".zip") else path),
         ]
 
         for candidate in candidates:

@@ -1,4 +1,5 @@
 """Evaluate an existing PPO at one fixed setpoint; never updates model or stats."""
+from ..paths import CURRENT_MODELS, artifact_path
 import argparse
 import csv
 import hashlib
@@ -21,14 +22,14 @@ from bluerov2_gym.envs.core.config_utils import load_yaml
 
 def main(argv=None, make_plots=True):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', default='bluerov_ppo.zip')
-    parser.add_argument('--normalizer', default='bluerov_vec_normalize.pkl')
+    parser.add_argument('--model', default=str(CURRENT_MODELS/'bluerov_ppo.zip'))
+    parser.add_argument('--normalizer', default=str(CURRENT_MODELS/'bluerov_vec_normalize.pkl'))
     parser.add_argument('--dynamics', default='configs/dynamics/dynamics_config.yaml')
     parser.add_argument('--target', type=float, nargs=3, default=[0.,0.,-2.])
     parser.add_argument('--offset', type=float, nargs=3, default=[.2,-.15,.08])
     parser.add_argument('--duration', type=float, default=100.)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--output', default='results/stationkeeping_single_corrected')
+    parser.add_argument('--output', default=str(artifact_path('evaluation','single_policy')))
     args = parser.parse_args(argv)
     config = load_yaml(args.dynamics)
     config['mechanics_model'] = 'corrected'

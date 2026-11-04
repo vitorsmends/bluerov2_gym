@@ -4,6 +4,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import yaml
 
@@ -17,12 +18,33 @@ ROOT=Path(__file__).resolve().parents[1]
 class WorkflowTests(unittest.TestCase):
     def test_config_relative_paths_independent_of_cwd(self):
         _,config=resolve(ROOT/'configs/evaluation/stationkeeping_single.yaml')
-        self.assertEqual(Path(config['model']),ROOT/'bluerov_ppo.zip')
+        self.assertEqual(Path(config['model']),ROOT/'artifacts/models/current/bluerov_ppo.zip')
         self.assertEqual(Path(config['dynamics']),ROOT/'configs/dynamics/dynamics_config.yaml')
         _,config=resolve(ROOT/'configs/evaluation/article.yaml')
         self.assertNotIn('config_path',config['disturbance'])
         self.assertIn('moderate',config['disturbance']['scenarios'])
         self.assertEqual(evaluation_plan(config)['runs'],200)
+
+    def test_default_run_root_is_centralized(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)/'artifacts'
+            with patch('bluerov2_gym.workflows.paths.ARTIFACTS_ROOT',root):
+                run=create_run('evaluation',{}, {})
+            self.assertEqual(run.parent,(root/'evaluation').resolve())
+
+    def test_plot_defaults_are_inside_artifacts(self):
+        from bluerov2_gym.workflows.paths import ARTIFACTS_ROOT
+        from bluerov2_gym.workflows.plotting.article.config import OUTPUT_DIR, TABLE_DIR
+        self.assertTrue(OUTPUT_DIR.is_relative_to(ARTIFACTS_ROOT))
+        self.assertTrue(TABLE_DIR.is_relative_to(ARTIFACTS_ROOT))
+        self.assertTrue(PlotManager().output.is_relative_to(ARTIFACTS_ROOT))
+
+    def test_agent_assets_exist_at_relocated_paths(self):
+        _,config=resolve(ROOT/'configs/evaluation/stationkeeping_single.yaml')
+        self.assertTrue(Path(config['model']).is_file())
+        self.assertTrue(Path(config['normalizer']).is_file())
+        for old in ['models','results','training_runs','bluerov_tensorboard','plots_training']:
+            self.assertFalse((ROOT/old).exists())
 
     def test_plan_counts_enabled_controllers_and_cases(self):
         config={'experiment':{'mode':'trajectory_suite','repetitions':3},
@@ -45,7 +67,8 @@ class WorkflowTests(unittest.TestCase):
             requested={'model':'relative.zip'}
             run=create_run('evaluation',requested,{'model':'absolute.zip'},path)
             self.assertEqual(yaml.safe_load((run/'config.requested.yaml').read_text()),requested)
-            for name in ['data','figures','tables','logs']:self.assertTrue((run/name).is_dir())
+            self.assertTrue((run/'logs').is_dir())
+            for name in ['data','figures','tables']:self.assertFalse((run/name).exists())
             self.assertIn('git_commit',yaml.safe_load((run/'manifest.yaml').read_text()))
             with self.assertRaises(FileExistsError):create_run('evaluation',{}, {},path)
 

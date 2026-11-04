@@ -15,8 +15,8 @@ Para escolher um diretório em vez do timestamp:
 
 ```bash
 bluerov evaluate --config configs/evaluation/stationkeeping_single.yaml \
-  --output runs/evaluation/meu_teste
-bluerov plot --run runs/evaluation/meu_teste --suite single_policy
+  --output artifacts/evaluation/meu_teste
+bluerov plot --run artifacts/evaluation/meu_teste --suite single_policy
 ```
 
 O diretório de avaliação precisa ser novo. Repetir apenas o comando `plot` é

@@ -6,8 +6,8 @@ Importar o manager não carrega PPO/CasADi e não lê resultados nem cria pastas
 
 ```bash
 bluerov list-plots
-bluerov plot --run runs/evaluation/SEU_RUN --suite article
-bluerov plot --run runs/evaluation/SEU_RUN --plots tracking_error rmse energy
+bluerov plot --run artifacts/evaluation/SEU_RUN --suite article
+bluerov plot --run artifacts/evaluation/SEU_RUN --plots tracking_error rmse energy
 ```
 
 | Suite | Rotinas | Dados esperados |
@@ -32,9 +32,10 @@ mesmos de antes. Os gráficos usam dados salvos, sem repetir a simulação.
 
 ## Dados históricos
 
-Os YAMLs em `configs/plots/*_legacy.yaml` apontam para as pastas antigas e
-escrevem em destinos separados sob `runs/plots/`. Ajuste os caminhos aos dados
-presentes no clone. Não há necessidade de mover ou regenerar CSVs históricos.
+Os YAMLs em `configs/plots/*_legacy.yaml` apontam para os dados importados em
+`artifacts/evaluation/imported/` e
+escrevem em destinos separados sob `artifacts/plots/`. Ajuste os caminhos aos dados
+presentes no clone. Os CSVs históricos foram movidos sem recalcular seu conteúdo.
 
 ```bash
 bluerov plot --config configs/plots/article_legacy.yaml
@@ -56,7 +57,7 @@ não foram alteradas.
 ```python
 from bluerov2_gym.workflows.plotting import PlotManager
 
-plots = PlotManager('runs/evaluation/SEU_RUN')
+plots = PlotManager('artifacts/evaluation/SEU_RUN')
 plots.generate_suite('article')
 plots.generate(['tracking_error', 'rmse'])
 ```
@@ -68,7 +69,7 @@ forneça caminhos absolutos para evitar dependência do diretório atual.
 ## Publicação explícita
 
 ```bash
-bluerov export-figures --run runs/evaluation/SEU_RUN \
+bluerov export-figures --run artifacts/evaluation/SEU_RUN \
   --folder article --destination oceans2026/figs/nova_comparacao
 ```
 

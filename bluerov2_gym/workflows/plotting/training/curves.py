@@ -1,4 +1,5 @@
 from __future__ import annotations
+from ...paths import TENSORBOARD_LOGS, artifact_path
 
 import argparse
 from pathlib import Path
@@ -268,8 +269,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--log-dir",
         type=Path,
-        default=Path("bluerov_tensorboard"),
-        help="Directory containing TensorBoard run folders (default: bluerov_tensorboard).",
+        default=TENSORBOARD_LOGS,
+        help="Directory containing TensorBoard run folders (default: artifacts/logs/tensorboard).",
     )
     parser.add_argument(
         "--run",
@@ -278,8 +279,8 @@ def parse_args(argv=None) -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("plots_training"),
-        help="Directory for generated PDF figures (default: plots_training).",
+        default=artifact_path("figures","training"),
+        help="Directory for generated PDF figures (default: artifacts/figures/training).",
     )
     parser.add_argument(
         "--smooth-window",

@@ -1,6 +1,6 @@
 suite: trajectories
 scenario: severe
-input_dir: ../../results-severe/trajectory_experiments
-output_dir: ../../runs/plots/trajectories_legacy/figures
-table_dir: ../../runs/plots/trajectories_legacy/tables
+input_dir: ../../artifacts/evaluation/imported/results-severe/trajectory_experiments
+output_dir: ../../artifacts/plots/trajectories_legacy/figures
+table_dir: ../../artifacts/plots/trajectories_legacy/tables
 repetition_id: 0

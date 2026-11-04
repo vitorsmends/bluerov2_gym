@@ -19,8 +19,8 @@ controllers:
   - name: ppo
     enabled: true
     params:
-      model_path: ../../bluerov_ppo.zip
-      vecnormalize_path: ../../bluerov_vec_normalize.pkl
+      model_path: ../../artifacts/models/current/bluerov_ppo.zip
+      vecnormalize_path: ../../artifacts/models/current/bluerov_vec_normalize.pkl
       env_config_path: ../dynamics/blue_rov_config.yaml
       dynamics_config_path: ../dynamics/dynamics_config.yaml
   - name: nmpc
@@ -53,7 +53,7 @@ trajetórias, ordem de execução e estado inicial foram preservados.
 ## Artefatos
 
 ```text
-runs/evaluation/<run_id>/
+artifacts/evaluation/<run_id>/
   config.requested.yaml
   config.resolved.yaml
   plan.yaml

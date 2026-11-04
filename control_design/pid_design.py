@@ -1,4 +1,5 @@
 from __future__ import annotations
+from bluerov2_gym.workflows.paths import artifact_path
 
 import json
 import numpy as np
@@ -39,10 +40,12 @@ def main():
 
     print(json.dumps(output, indent=4))
 
-    with open("pid_design_output.json", "w", encoding="utf-8") as f:
+    output=artifact_path("control_design","pid_design_output.json")
+    output.parent.mkdir(parents=True,exist_ok=True)
+    with open(output, "w", encoding="utf-8") as f:
         json.dump(output, f, indent=4)
 
-    print("\nSaved: pid_design_output.json")
+    print(f"\nSaved: {output}")
 
 
 if __name__ == "__main__":

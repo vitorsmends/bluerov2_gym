@@ -1,3 +1,4 @@
+from ...paths import IMPORTED_RESULTS, artifact_path
 import os
 import numpy as np
 import pandas as pd
@@ -25,9 +26,9 @@ def configure(settings=None):
     else:
         with (ROOT / 'configs/evaluation/ocean.yaml').open() as stream:
             config_default = yaml.safe_load(stream)['default_scenario']
-    INPUT_DIR = Path(settings.get("input_dir", ROOT / (f"results-{config_default}/stationkeeping")))
-    OUTPUT_DIR = Path(settings.get("output_dir", ROOT / (f"results-{config_default}/plots_stationkeeping_cost_tradeoff")))
-    TABLE_DIR = Path(settings.get("table_dir", ROOT / (f"results-{config_default}/tables_stationkeeping_cost_tradeoff")))
+    INPUT_DIR = Path(settings.get("input_dir", IMPORTED_RESULTS / f"results-{config_default}/stationkeeping"))
+    OUTPUT_DIR = Path(settings.get("output_dir", artifact_path("figures","plots_stationkeeping_cost_tradeoff",config_default)))
+    TABLE_DIR = Path(settings.get("table_dir", artifact_path("tables","tables_stationkeeping_cost_tradeoff",config_default)))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     TABLE_DIR.mkdir(parents=True, exist_ok=True)
 

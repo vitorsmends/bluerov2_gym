@@ -13,6 +13,8 @@ Main strategy:
 """
 
 from __future__ import annotations
+from pathlib import Path
+from bluerov2_gym.workflows.paths import artifact_path
 
 from dataclasses import dataclass, field
 import json
@@ -280,7 +282,9 @@ class EfficientNMPCDesign:
 
         print("=" * 80 + "\n")
 
-    def save_json(self, filename: str = "efficient_nmpc_design_output.json"):
+    def save_json(self, filename: str | None = None):
+        filename = artifact_path("control_design", "efficient_nmpc_design_output.json") if filename is None else Path(filename)
+        filename.parent.mkdir(parents=True, exist_ok=True)
         with open(filename, "w", encoding="utf-8") as f:
             json.dump(self.to_dict(), f, indent=4)
 

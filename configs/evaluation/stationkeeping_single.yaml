@@ -1,7 +1,7 @@
 experiment:
   mode: stationkeeping_single
-model: ../../bluerov_ppo.zip
-normalizer: ../../bluerov_vec_normalize.pkl
+model: ../../artifacts/models/current/bluerov_ppo.zip
+normalizer: ../../artifacts/models/current/bluerov_vec_normalize.pkl
 dynamics: ../dynamics/dynamics_config.yaml
 target:
 - 0.0

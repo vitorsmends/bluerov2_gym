@@ -1,4 +1,4 @@
 suite: legacy_path_tracking
-input_dir: ../../results-severe/experiments
-output_dir: ../../runs/plots/path_tracking_legacy/figures
-table_dir: ../../runs/plots/path_tracking_legacy/tables
+input_dir: ../../artifacts/evaluation/imported/results-severe/experiments
+output_dir: ../../artifacts/plots/path_tracking_legacy/figures
+table_dir: ../../artifacts/plots/path_tracking_legacy/tables

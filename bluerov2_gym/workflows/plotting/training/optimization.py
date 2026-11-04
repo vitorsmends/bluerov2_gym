@@ -1,11 +1,12 @@
+from ...paths import artifact_path
 from pathlib import Path
 import optuna
 
 # Artifact locations are independent of the removed script directories.
 BASE_DIR = Path(__file__).resolve().parents[4]
 
-DB_PATH = BASE_DIR / "optuna_results" / "ppo_bluerov_optuna.db"
-OUTPUT_DIR = BASE_DIR / "optuna_plots"
+DB_PATH = artifact_path("optimization","ppo_bluerov_optuna.db")
+OUTPUT_DIR = artifact_path("figures","optimization")
 
 
 

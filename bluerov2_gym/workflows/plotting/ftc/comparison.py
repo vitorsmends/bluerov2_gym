@@ -1,3 +1,4 @@
+from ...paths import IMPORTED_RESULTS, artifact_path
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -7,14 +8,14 @@ import pandas as pd
 def main(settings=None):
     from ..paths import ROOT
     settings = settings or {}
-    output = Path(settings.get('output_dir', ROOT))
+    output = Path(settings.get('output_dir', artifact_path('figures','ftc')))
     output.mkdir(parents=True, exist_ok=True)
     nominal = pd.read_csv(
-        settings.get("nominal", ROOT / "results/nominal/ppo_figure_eight_depth.csv")
+        settings.get("nominal", IMPORTED_RESULTS / "results/nominal/ppo_figure_eight_depth.csv")
     )
     
     ftc = pd.read_csv(
-        settings.get("ftc", ROOT / "results/ftc/ppo_figure_eight_depth.csv")
+        settings.get("ftc", IMPORTED_RESULTS / "results/ftc/ppo_figure_eight_depth.csv")
     )
     
     

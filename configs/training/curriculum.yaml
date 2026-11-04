@@ -28,8 +28,8 @@ environment:
   dynamics_config_file: ../dynamics/dynamics_config.yaml
   dynamics_config: {}
 paths:
-  tensorboard_log: ./bluerov_tensorboard/
-  model_dir: ./models/
+  tensorboard_log: ../../artifacts/logs/tensorboard/
+  model_dir: ../../artifacts/models/curriculum/
   model_name: bluerov_ppo_curriculum
   vecnormalize_name: bluerov_vec_normalize_curriculum.pkl
 vecnormalize:

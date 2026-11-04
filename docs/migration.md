@@ -39,7 +39,7 @@ Os controladores agora são importados sob demanda pela fábrica.
 
 ## Saídas
 
-Novos comandos usam `runs/<tipo>/<run_id>` e recusam reutilizar uma pasta de
+Novos comandos usam `artifacts/<tipo>/<run_id>` e recusam reutilizar uma pasta de
 avaliação/treino. Os módulos canônicos de comportamentos legados mantêm seus destinos próprios.
 O atalho redundante `run_oceans.py` foi removido; use `bluerov train` com
 `--seeds 42 43 44 45 46`.
@@ -75,3 +75,10 @@ Na migração foram realizados:
 Essas comparações foram feitas no mesmo ambiente de fontes, NumPy e Matplotlib.
 Não implicam que valores temporais ou renderização entre versões diferentes de
 bibliotecas sejam idênticos. As figuras históricas não foram sobrescritas.
+
+## Centralização posterior dos artefatos
+
+Os dados históricos também foram movidos para `artifacts/`, com verificação
+de checksums e ajuste dos YAMLs. O inventário e os novos destinos estão em
+[DATA.md](../DATA.md). Após essa etapa, 30 testes passaram; a avaliação de
+100 s do agente preservou exatamente o CSV e o PNG anteriores.

@@ -1,0 +1,8 @@
+{
+  "removed_disposable": [
+    ".DS_Store",
+    "artifacts/evaluation/imported/results/.DS_Store",
+    "artifacts/figures/imported/article_plots_simple/.DS_Store",
+    "build/"
+  ]
+}

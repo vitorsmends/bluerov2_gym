@@ -1,3 +1,4 @@
+from ...paths import IMPORTED_RESULTS, artifact_path
 import argparse
 import os
 import numpy as np
@@ -399,9 +400,9 @@ def main(argv=None, settings=None):
         with (ROOT / "configs/evaluation/ocean.yaml").open("r", encoding="utf-8") as stream:
             ocean_config = yaml.safe_load(stream)
     scenario = settings.get("scenario") or args.scenario or ocean_config.get("default_scenario", "moderate")
-    INPUT_DIR = Path(settings.get("input_dir", ROOT / f"results-{scenario}/trajectory_experiments"))
-    OUTPUT_DIR = Path(settings.get("output_dir", ROOT / f"oceans2026/figs/results-{scenario}/plots_trajectory_experiments"))
-    TABLE_DIR = Path(settings.get("table_dir", ROOT / f"results-{scenario}/tables_trajectory_experiments"))
+    INPUT_DIR = Path(settings.get("input_dir", IMPORTED_RESULTS / f"results-{scenario}/trajectory_experiments"))
+    OUTPUT_DIR = Path(settings.get("output_dir", artifact_path("figures","trajectory_spatial",scenario)))
+    TABLE_DIR = Path(settings.get("table_dir", artifact_path("tables","trajectory_spatial",scenario)))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     TABLE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -431,7 +432,7 @@ def main(argv=None, settings=None):
             representative,
             filename="path_tracking_xy_first_repetition",
             output_dir=Path(
-                settings.get("representative_output_dir", ROOT / f"oceans2026/figs/results-{scenario}/plots_path_tracking")
+                settings.get("representative_output_dir", artifact_path("figures","trajectory_spatial",scenario,"representative"))
             ),
         )
 

@@ -1,119 +1,82 @@
-# Organização dos dados de experimentos
+# Dados e artefatos
 
-Os arquivos pesados são versionados com Git LFS. Um clone pode mostrar os
-caminhos dos arquivos mesmo quando o conteúdo ainda não foi baixado: nesse
-caso, o arquivo local contém apenas um ponteiro LFS. Depois de clonar o
-repositório, baixe os objetos com:
-
-```bash
-git lfs install
-git lfs pull
-```
-
-## Estrutura
+Todo dado gerado tem como destino padrão `artifacts/`. A origem desse caminho
+é única: `bluerov2_gym/workflows/paths.py`. Os comandos funcionam fora da raiz do
+repositório quando o YAML é passado pelo caminho absoluto.
 
 ```text
-models/
-  bluerov_ppo_curriculum_seed_<seed>.zip
-  bluerov_vec_normalize_curriculum_seed_<seed>.pkl
-  bluerov_ppo_curriculum_checkpoint_seed_<seed>_<steps>_steps.zip
-  ...arquivos auxiliares dos checkpoints...
-  bluerov_ppo_curriculum_seed_<seed>_config.yaml
-bluerov_tensorboard/
-  PPO_BlueROV2_Curriculum_seed_<seed>_1/
-  PPO_BlueROV2_Curriculum_<run>/
-  PPO_BlueROV2_Optuna_Trial_<trial>_1/
-  ...outros logs de treinamento...
-results-moderate/
-  trajectory_ftc/                 # avaliação FTC por controlador e trajetória
-  tables_trajectory_experiments/   # tabela resumida
-results-severe/
-  path_tracking/                   # avaliação de seguimento de trajetória
-  stationkeeping/                  # avaliação de manutenção de posição
-  trajectory_experiments/          # avaliação por controlador e trajetória
-  tables_*/                        # tabelas agregadas por experimento
+artifacts/
+  models/
+    current/                 # agente/VecNormalize que estavam na raiz
+    curriculum/              # modelos e checkpoints que estavam em models/
+    extracted/               # pesos PyTorch e metadados extraídos
+  training/
+    <run_id>/                # novos treinos; models/, logs/, config e manifesto
+    imported/                # antigos training_runs, estrutura interna preservada
+  evaluation/
+    <run_id>/                # novas avaliações; data/, figures/, tables/, logs/
+    imported/                # resultados históricos; antigos results*/
+  logs/
+    tensorboard/             # antigos bluerov_tensorboard/
+    tensorboard_ftc/
+  figures/                   # saídas de plots fora de uma execução específica
+  tables/                    # tabelas fora de uma execução específica
+  optimization/              # banco Optuna e seus logs
+  control_design/            # relatórios JSON de PID/LQR/NMPC
+  archive/                   # backups como experiments.zip
+  migration/                 # mapas de origem/destino e checksums da reorganização
 ```
 
-### Modelos e seeds de treinamento
+Diretórios são criados quando necessários. Subpastas são criadas somente
+quando algum dado precisa ser escrito. `--output`, configurações explícitas e
+`export-figures --destination` permitem destinos personalizados; sem override,
+as saídas permanecem em `artifacts/`.
 
-O commit inclui nomes de artefatos de treinamento para as seeds **42, 43, 44,
-45 e 46**. Isso não garante que seus conteúdos estejam baixados em cada clone,
-nem identifica por si só uma ablação. Quando os objetos estiverem disponíveis,
-`models/` contém modelos PPO (`.zip`), estatísticas de normalização do ambiente
-(`.pkl`), checkpoints intermediários e configurações (`.yaml`). Os checkpoints
-incluem o número de passos no nome; use o modelo e o arquivo `VecNormalize` da
-mesma seed ao avaliar uma política.
+## Modelos atuais
 
-Não há evidência documentada de cinco seeds para a ablação `no_curriculum`.
-No checkout em que este inventário foi elaborado, foi identificado um log
-local dessa ablação para a seed 42; isso não confirma a disponibilidade dos
-dados correspondentes no outro computador. Não presuma que as seeds 43–46
-sejam dessa ablação sem conferir suas configurações e logs.
+O agente de station keeping solicitado está em:
 
-Os caminhos dos logs do TensorBoard ficam em `bluerov_tensorboard/`. Os
-diretórios com `Curriculum_seed_<seed>` correspondem às execuções identificadas
-por seed. Os demais diretórios incluem outros treinamentos, estudos de Optuna
-e runs anteriores; o nome do diretório não garante por si só uma seed
-específica.
+- `artifacts/models/current/bluerov_ppo.zip`
+- `artifacts/models/current/bluerov_vec_normalize.pkl`
 
-### Resultados de avaliação
+Os YAMLs ativos já usam esses destinos. Use sempre o normalizador correspondente
+ao modelo. Os checkpoints de currículo preservam nomes e seeds em
+`artifacts/models/curriculum/`; políticas de outras campanhas permanecem em
+`artifacts/training/imported/`, junto dos seus arquivos originais.
 
-Os nomes das pastas indicam o cenário ou tipo de avaliação; quando hidratados,
-os arquivos CSV contêm as medições. Exemplos:
+Os arquivos de manifesto históricos continuam intactos, inclusive caminhos
+registrados na época em que foram produzidos. Para localizar um arquivo movido,
+consulte os mapas em `artifacts/migration/`. Não se deve reescrever a proveniência
+de um experimento antigo como se ele tivesse sido executado na organização nova.
 
-- `results-severe/path_tracking/`: CSV por controlador (`pid.csv`,
-  `ppo.csv`, etc.). No checkout usado para elaborar este documento, os CSVs
-  inspecionados tinham `repetition_id` e `seed`; confira os arquivos baixados
-  no seu clone antes de depender dessas colunas.
-- `results-severe/stationkeeping/`: CSV por controlador para manutenção de
-  posição. Os CSVs inspecionados no checkout de referência tinham colunas de
-  repetição e seed; valide os arquivos locais após o download.
-- `results-severe/trajectory_experiments/`: CSV por controlador e trajetória,
-  por exemplo `ppo_circle.csv`. Os arquivos atualmente armazenados são
-  resultados legados de uma execução de 1000 passos: não têm `repetition_id`
-  nem `seed`.
-- `results-moderate/trajectory_ftc/`: resultados de avaliação FTC, separados
-  por controlador e trajetória.
-- `results-*/tables_*/`: tabelas resumidas ou agregadas, não substituem os
-  CSVs brutos por execução.
+## Integridade e limpeza
 
-**Seed de treinamento e seed de distúrbio são coisas diferentes.** A seed no
-nome de um modelo identifica a execução de treinamento da política. Nos CSVs
-de avaliação que têm as colunas `seed` e `repetition_id`, elas identificam a
-realização do distúrbio e a repetição do benchmark. Os CSVs legados de
-`trajectory_experiments/` não permitem recuperar essas informações.
+A migração verificou SHA-256 antes e depois de cada arquivo movido. Nenhum modelo,
+log de treinamento ou resultado numérico foi descartado. Foram removidos apenas
+metadados `.DS_Store`, cópias temporárias de build/cache e pastas vazias fora dos
+ambientes e referências protegidos.
 
-Para conferir os arquivos LFS presentes no clone:
+O utilitário é reutilizável para conferir se restaram dados nos caminhos antigos:
 
 ```bash
-git lfs ls-files
+python scripts/organize_artifacts.py          # apenas lista movimentos pendentes
+python scripts/organize_artifacts.py --apply  # move com checksums e remove vazios
 ```
 
-Em geral, `*` na saída indica um objeto LFS baixado e `-` indica que o
-conteúdo não está disponível localmente. Depois do `git lfs pull`, confira a
-saída novamente e inspecione o cabeçalho dos CSVs relevantes, por exemplo:
+Não sobrescreve destinos existentes. Não atravessa `.git`, ambientes virtuais
+ou `_references` para excluir pastas vazias.
 
-```bash
-git lfs pull
-git lfs ls-files
-head -n 1 results-severe/path_tracking/ppo.csv
-head -n 1 results-severe/stationkeeping/ppo_stationkeeping.csv
-head -n 1 results-severe/trajectory_experiments/ppo_circle.csv
-```
+## Git LFS
 
-Para confirmar uma seed de treinamento ou ablação, compare também os arquivos
-de configuração em `models/` e os logs correspondentes do TensorBoard; a
-existência do caminho no Git ou o nome da pasta não prova que o objeto foi
-baixado nem que pertence a uma ablação específica.
+Os artefatos já versionados continuam versionados nos novos caminhos. Novos
+artefatos locais são ignorados por padrão, para não incluir cada avaliação ou
+checkpoint acidentalmente. Para preservar uma execução específica, use
+`git add -f` somente nos arquivos desejados.
 
-Para entender como reproduzir os treinamentos e benchmarks, consulte
-[experiments/README.md](./experiments/README.md).
+CSV e TensorBoard usam Git LFS, assim como `.zip`, `.pkl` e `.pth` sob `artifacts/`.
+Após clonar, execute `git lfs pull` para obter os objetos disponíveis. A presença
+de um ponteiro LFS não comprova que o conteúdo está baixado.
 
-## Novos workflows
-
-Os comandos `bluerov train/evaluate` criam pastas exclusivas em `runs/`, com
-configuração e manifesto ao lado dos dados. `runs/` é ignorado por padrão para
-não versionar todos os diagnósticos locais. Para preservar uma execução
-selecionada, adicione somente seus artefatos desejados com `git add -f`.
-As regras LFS também abrangem modelos sob `runs/`. Dados antigos não foram movidos.
-Veja [docs/migration.md](docs/migration.md).
+Seed de treinamento e seed de distúrbio continuam sendo conceitos distintos.
+Uma tabela agregada ou um nome de pasta não comprova múltiplos treinamentos;
+confira os manifestos e os arquivos originais antes de interpretar variabilidade.

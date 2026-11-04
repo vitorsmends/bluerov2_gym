@@ -40,7 +40,8 @@ def evaluate(args):
         with log_to(run/'logs/evaluation.log'):
             if plan['mode']=='stationkeeping_single':
                 from .evaluation.single_policy import main as single
-                (run/'data').rmdir()  # single evaluator creates its exclusive data directory
+                if (run/'data').exists():
+                    (run/'data').rmdir()  # single evaluator creates its exclusive data directory
                 argv=['--model',config['model'],'--normalizer',config['normalizer'],
                       '--dynamics',config['dynamics'],'--output',str(run/'data'),
                       '--duration',str(config.get('duration',100)),'--seed',str(config.get('seed',42)),
