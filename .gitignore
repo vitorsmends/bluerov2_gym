@@ -233,3 +233,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# New workflow runs are exclusive local artifacts; preserve selected data explicitly.
+runs/
+!bluerov2_gym/workflows/plotting/assets/*.csv

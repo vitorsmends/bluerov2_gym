@@ -1,18 +1,13 @@
-from plot_tracking_error import main as plot_tracking_error
-from plot_rmse import main as plot_rmse
-from plot_cpu_time import main as plot_cpu_time
-from plot_energy import main as plot_energy
-from plot_pareto import main as plot_pareto
+"""Compatibility entry point; implementation: bluerov2_gym.workflows.plotting.article.run_all."""
+import importlib
+import runpy
+import sys
+from pathlib import Path
 
-
-def main():
-    plot_tracking_error()
-    plot_rmse()
-    plot_cpu_time()
-    plot_energy()
-    plot_pareto()
-    print("[OK] All plots were generated.")
-
-
+_root = str(Path(__file__).resolve().parents[0])
+if _root not in sys.path:
+    sys.path.insert(0, _root)
 if __name__ == "__main__":
-    main()
+    runpy.run_module("bluerov2_gym.workflows.plotting.article.run_all", run_name="__main__")
+else:
+    sys.modules[__name__] = importlib.import_module("bluerov2_gym.workflows.plotting.article.run_all")

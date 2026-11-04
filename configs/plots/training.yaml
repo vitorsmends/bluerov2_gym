@@ -1,0 +1,6 @@
+suite: training
+log_dir: ../../bluerov_tensorboard
+output_dir: ../../runs/plots/training/figures
+smooth_window: 10
+min_seeds: 5
+# groups: ["baseline=PPO_BlueROV2_Curriculum_seed_*"]

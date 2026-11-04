@@ -1,23 +1,13 @@
+"""Compatibility entry point; implementation: bluerov2_gym.workflows.plotting.article.config."""
+import importlib
+import runpy
+import sys
 from pathlib import Path
 
-SCENARIOS = {
-    "Moderate": Path("results-moderate/trajectory_experiments"),
-    "Severe": Path("results-severe/trajectory_experiments"),
-}
-
-CONTROLLERS = {
-    "PID":  {"prefix": "pid_",  "color": "#4E79A7"},
-    "SMC":  {"prefix": "smc_",  "color": "#B07AA1"},
-    "NMPC": {"prefix": "nmpc_", "color": "#E15759"},
-    "PPO":  {"prefix": "ppo_",  "color": "#59A14F"},
-}
-
-OUTPUT_DIR = Path("oceans2026/figs")
-TABLE_DIR = Path("article_tables_simple")
-
-THRUSTER_COLUMNS = [f"T{i}" for i in range(1, 7)]
-
-DPI = 300
-FIGSIZE = (6.5, 4.2)
-LINE_WIDTH = 1.8
-BAND_ALPHA = 0.20
+_root = str(Path(__file__).resolve().parents[0])
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+if __name__ == "__main__":
+    runpy.run_module("bluerov2_gym.workflows.plotting.article.config", run_name="__main__")
+else:
+    sys.modules[__name__] = importlib.import_module("bluerov2_gym.workflows.plotting.article.config")

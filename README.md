@@ -1,35 +1,112 @@
 # BlueROV2 Gymnasium
 
-A Gymnasium-compatible simulation environment for the **BlueROV2**
-autonomous underwater vehicle (AUV). The project provides a realistic
-six-degree-of-freedom dynamic model, configurable ocean disturbances,
-reinforcement learning support, classical control benchmarks, and an
-experiment framework for reproducible controller evaluation.
+Ambiente de reinforcement learning do BlueROV2 com dinâmica de seis graus de
+liberdade, distúrbios JONSWAP e avaliação de PID, SMC, NMPC e PPO.
 
-## Features
+## Instalação
 
--   Six-DoF BlueROV2 dynamic model
--   Gymnasium-compatible API
--   Stable-Baselines3 integration
--   MeshCat visualization
--   Ocean current and JONSWAP disturbances
--   PID, PPO, SMC and NMPC controllers
--   Experiment framework with YAML configuration
--   Automatic logging, CSV export and plotting
+Na raiz do repositório, em um ambiente Python 3.10 ou superior compatível com
+PyTorch e suas dependências:
 
-## Installation
-
-``` bash
-git clone https://github.com/gokulp01/bluerov2_gym.git
-cd bluerov2_gym
-uv venv
-source .venv/bin/activate
-uv pip install -e .
+```bash
+python -m pip install -e .
+# Opcional: NMPC e otimização de hiperparâmetros
+python -m pip install -e '.[control,optimize]'
 ```
 
-## Quick Start
+O comando principal é `bluerov`. A alternativa equivalente, sem depender do
+executável no PATH, é `python -m bluerov2_gym.workflows`.
 
-``` python
+## Treinar
+
+```bash
+bluerov train --config configs/training/curriculum.yaml
+# Treinamentos independentes:
+bluerov train --config configs/training/curriculum.yaml --seeds 42 43 44 45 46
+```
+
+Cada treinamento salva seus modelos, VecNormalize, checkpoints e TensorBoard
+em uma pasta própria sob `runs/training/`. [Guia de treinamento](docs/training.md).
+
+## Avaliar o agente atual em um setpoint
+
+```bash
+bluerov inspect --config configs/evaluation/stationkeeping_single.yaml
+bluerov evaluate --config configs/evaluation/stationkeeping_single.yaml
+```
+
+Essa configuração usa `bluerov_ppo.zip` e `bluerov_vec_normalize.pkl` da raiz,
+setpoint `(0, 0, -2 m)`, 100 segundos e mecânica corrigida. Não retreina o agente.
+O comando imprime o diretório da execução. Gere os gráficos a partir dele:
+
+```bash
+bluerov plot --run runs/evaluation/SEU_RUN --suite single_policy
+```
+
+## Comparar controladores
+
+```bash
+bluerov inspect --config configs/evaluation/trajectory_comparison.yaml
+bluerov evaluate --config configs/evaluation/trajectory_comparison.yaml
+bluerov plot --run runs/evaluation/SEU_RUN --suite trajectories
+bluerov plot --run runs/evaluation/SEU_RUN --suite article
+```
+
+A lista `controllers` no YAML define os controladores da avaliação. Use
+`enabled: false` para excluir um controlador. O `inspect` mostra a seleção,
+parâmetros, caminhos da política/normalizador, cenários, seeds e total de casos
+antes da simulação. Confira os caminhos dos modelos nos exemplos de campanhas;
+os checkpoints históricos podem não estar disponíveis neste clone.
+
+| Configuração | Finalidade |
+|---|---|
+| `configs/evaluation/stationkeeping_single.yaml` | Um agente PPO, um setpoint |
+| `configs/evaluation/stationkeeping_comparison.yaml` | PID/PPO/SMC/NMPC, um setpoint, cenários do YAML |
+| `configs/evaluation/trajectory_comparison.yaml` | Campanha geral de trajetórias |
+| `configs/evaluation/article.yaml` | Campanha do artigo: 200 casos configurados |
+| `configs/evaluation/ftc.yaml` | Campanha com a política FTC indicada |
+
+[Guia de avaliação](docs/evaluation.md) · [Guia de plots](docs/plotting.md).
+
+## Gráficos existentes e curvas de treino
+
+Plotar não inicia avaliação e não carrega políticas:
+
+```bash
+bluerov list-plots
+bluerov plot --config configs/plots/article_legacy.yaml
+bluerov plot --config configs/plots/stationkeeping_legacy.yaml
+bluerov plot-training --config configs/plots/training.yaml
+```
+
+As rotinas de desenho e cálculo foram preservadas. A classe `PlotManager`
+organiza as suites e seus caminhos; cada família mantém suas métricas e estilos.
+Resultados antigos continuam nos diretórios originais. Novas execuções não
+sobrescrevem automaticamente figuras de `oceans2026/figs`.
+
+## Organização
+
+```text
+bluerov2_gym/
+  envs/                    # ambiente, dinâmica, recompensa e renderização
+  workflows/
+    cli.py                 # train, evaluate, inspect, plot, plot-training
+    training/              # currículo, treino legado, otimização
+    evaluation/            # runner, controladores, referências e trajetórias
+    plotting/              # PlotManager e famílias de figuras
+configs/                   # configuração principal, agrupada por tarefa
+runs/                      # novas execuções; dados locais, ignorados pelo Git
+control_design/            # projetos de controle e seu modelo próprio
+training/, experiments/, plots/, scripts/
+                           # comandos antigos compatíveis
+```
+
+[Guia rápido](docs/quickstart.md) · [Mapa de migração](docs/migration.md) ·
+[Dados históricos e Git LFS](DATA.md).
+
+O Gym continua disponível diretamente:
+
+```python
 import gymnasium as gym
 import bluerov2_gym
 
@@ -37,60 +114,13 @@ env = gym.make('BlueRov-v0')
 obs, info = env.reset()
 ```
 
-## Experiment Framework
+A seleção da mecânica e das ondas é independente. Consulte
+[mechanics.md](docs/mechanics.md) e [disturbance_models.md](docs/disturbance_models.md).
 
-Run:
+## Verificação
 
-``` bash
-python experiments/run_experiment.py
+```bash
+python -m unittest discover -s tests -v
 ```
 
-Implemented controllers:
-
--   PID
--   PPO
--   Sliding Mode Control (SMC)
--   Nonlinear Model Predictive Control (NMPC)
-
-Configuration files:
-
--   experiments/config/experiment.yaml
--   experiments/config/ocean_environment.yaml
-
-The framework automatically executes experiments, records metrics,
-exports CSV files and generates plots.
-
-## Experiment data
-
-Experiment models, logs, and CSV results are organized and versioned with Git
-LFS. See [DATA.md](./DATA.md) for the directory layout, seed conventions, and
-download instructions.
-
-## Environment
-
-Wave-model presets and independent ablations are documented in
-[docs/disturbance_models.md](docs/disturbance_models.md). The default `std`
-preset preserves the original wave model; `corrected` waves are opt-in.
-Mechanical fixes are enabled by default through `mechanics_model: corrected`;
-see [docs/mechanics.md](docs/mechanics.md) for equations and legacy reproduction.
-
-State:
-
-    [x,y,z,roll,pitch,yaw,u,v,w,p,q,r]
-
-Action:
-
-    [t1,t2,t3,t4,t5,t6]
-
-## Repository Structure
-
-    bluerov2_gym/
-    ├── bluerov2_gym/
-    ├── experiments/
-    ├── examples/
-    ├── tests/
-    └── README.md
-
-## License
-
-MIT License.
+Licença MIT.

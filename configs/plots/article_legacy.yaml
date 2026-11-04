@@ -1,0 +1,6 @@
+suite: article
+scenarios:
+  Moderate: ../../results-moderate/trajectory_experiments
+  Severe: ../../results-severe/trajectory_experiments
+output_dir: ../../runs/plots/article_legacy/figures
+table_dir: ../../runs/plots/article_legacy/tables

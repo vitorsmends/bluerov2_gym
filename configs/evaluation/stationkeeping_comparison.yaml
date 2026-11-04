@@ -1,0 +1,60 @@
+experiment:
+  mode: stationkeeping
+  dt: 0.1
+  steps: 1000
+  repetitions: 5
+  thrust_limit: 40.0
+  render_mode: null
+output:
+  directory: results-severe/trajectory_experiments
+environment:
+  dynamics_config:
+    disturbance_model:
+      preset: std
+controllers:
+- name: pid
+  enabled: true
+  params: {}
+- name: ppo
+  enabled: true
+  params:
+    model_path: ../../ppo_trajectory_final.zip
+    vecnormalize_path: ../../vec_normalize.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+- name: smc
+  enabled: true
+  params: {}
+- name: nmpc
+  enabled: true
+  params:
+    horizon: 10
+    control_blocks: 5
+disturbance:
+  config_path: ocean.yaml
+  default_scenario: severe
+trajectories:
+- name: square
+  enabled: true
+  params: {}
+- name: figure_eight_depth
+  enabled: true
+  params: {}
+- name: circle
+  enabled: true
+  params: {}
+- name: letter_b
+  enabled: true
+  params: {}
+- name: star
+  enabled: true
+  params: {}
+stationkeeping:
+  targets:
+  - id: 1
+    name: center_forward
+    pos:
+    - 0.0
+    - 0.0
+    - -0.8
+    yaw_deg: 0.0

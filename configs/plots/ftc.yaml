@@ -1,0 +1,4 @@
+suite: ftc
+nominal: ../../results/nominal/ppo_figure_eight_depth.csv
+ftc: ../../results/ftc/ppo_figure_eight_depth.csv
+output_dir: ../../runs/plots/ftc/figures

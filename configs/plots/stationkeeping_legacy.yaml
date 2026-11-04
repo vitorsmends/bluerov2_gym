@@ -1,0 +1,4 @@
+suite: stationkeeping
+input_dir: ../../results-moderate/stationkeeping
+output_dir: ../../runs/plots/stationkeeping_legacy/figures
+table_dir: ../../runs/plots/stationkeeping_legacy/tables

@@ -1,23 +1,13 @@
-"""Base controller interface for path-tracking experiments."""
+"""Compatibility entry point; implementation: bluerov2_gym.workflows.evaluation.controllers.base."""
+import importlib
+import runpy
+import sys
+from pathlib import Path
 
-from __future__ import annotations
-
-import numpy as np
-
-
-class BaseController:
-    """Common interface implemented by all controllers."""
-
-    name = "base"
-
-    def reset(self):
-        """Reset internal controller state before a new experiment."""
-        pass
-
-    def get_action(self, obs: dict, state: np.ndarray, reference: np.ndarray, t: float, **kwargs) -> np.ndarray:
-        """Return direct thruster commands [T1, ..., T6] in Newtons.
-
-        The **kwargs argument absorbs unexpected parameters (like info) sent by 
-        the experiment runner, ensuring backward compatibility with older controllers.
-        """
-        raise NotImplementedError
+_root = str(Path(__file__).resolve().parents[1])
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+if __name__ == "__main__":
+    runpy.run_module("bluerov2_gym.workflows.evaluation.controllers.base", run_name="__main__")
+else:
+    sys.modules[__name__] = importlib.import_module("bluerov2_gym.workflows.evaluation.controllers.base")

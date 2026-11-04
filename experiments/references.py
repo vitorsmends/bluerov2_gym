@@ -1,15 +1,13 @@
-from __future__ import annotations
+"""Compatibility entry point; implementation: bluerov2_gym.workflows.evaluation.references."""
+import importlib
+import runpy
+import sys
+from pathlib import Path
 
-import numpy as np
-
-
-class StationKeepingReference:
-    def __init__(self, position, yaw_rad):
-        self.position = np.asarray(position, dtype=float).reshape(3)
-        self.yaw_rad = float(yaw_rad)
-
-    def get_reference(self, t: float) -> np.ndarray:
-        ref = np.zeros(12, dtype=float)
-        ref[0:3] = self.position
-        ref[5] = self.yaw_rad
-        return ref
+_root = str(Path(__file__).resolve().parents[0])
+if _root not in sys.path:
+    sys.path.insert(0, _root)
+if __name__ == "__main__":
+    runpy.run_module("bluerov2_gym.workflows.evaluation.references", run_name="__main__")
+else:
+    sys.modules[__name__] = importlib.import_module("bluerov2_gym.workflows.evaluation.references")

@@ -108,3 +108,12 @@ baixado nem que pertence a uma ablação específica.
 
 Para entender como reproduzir os treinamentos e benchmarks, consulte
 [experiments/README.md](./experiments/README.md).
+
+## Novos workflows
+
+Os comandos `bluerov train/evaluate` criam pastas exclusivas em `runs/`, com
+configuração e manifesto ao lado dos dados. `runs/` é ignorado por padrão para
+não versionar todos os diagnósticos locais. Para preservar uma execução
+selecionada, adicione somente seus artefatos desejados com `git add -f`.
+As regras LFS também abrangem modelos sob `runs/`. Dados antigos não foram movidos.
+Veja [docs/migration.md](docs/migration.md).

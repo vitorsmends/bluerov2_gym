@@ -1,0 +1,78 @@
+# Migração dos workflows
+
+A implementação principal agora está em `bluerov2_gym/workflows`. Os arquivos
+anteriores são wrappers: ao importar, expõem o mesmo módulo canônico; ao executar,
+chamam sua entrada original. Não há duas cópias das fórmulas Python.
+
+| Caminho antigo | Implementação principal |
+|---|---|
+| `training/train_curriculum.py` | `workflows/training/curriculum.py` |
+| `training/train.py` | `workflows/training/legacy_train.py` |
+| `training/optmize.py` | `workflows/training/optimize.py` |
+| `experiments/runner.py` | `workflows/evaluation/runner.py` |
+| `experiments/controllers/` | `workflows/evaluation/controllers/` |
+| `experiments/references.py`, `trajectories.py` | `workflows/evaluation/` |
+| `scripts/evaluate_stationkeeping.py` | `workflows/evaluation/single_policy.py` |
+| `training/test_with_plot.py` | `workflows/evaluation/legacy_stationkeeping.py` |
+| `plots/plot_*.py` e suporte | `workflows/plotting/article/` |
+| `experiments/plots/station*.py` | `workflows/plotting/stationkeeping/` |
+| Demais `experiments/plots/` | `workflows/plotting/trajectories/` |
+| `training/plot_training.py` | `workflows/plotting/training/curves.py` |
+| `training/plot_optmize.py` | `workflows/plotting/training/optimization.py` |
+| `experiments/comparison_ftc.py` | `workflows/plotting/ftc/comparison.py` |
+
+Os caminhos da coluna direita são relativos a `bluerov2_gym/`.
+`control_design/` e `scripts/validate_gazebo_dynamics.py` permanecem específicos
+de projeto/auditoria; não fazem parte da avaliação comparativa.
+
+## Configurações
+
+`configs/` é a interface principal para novos comandos, com caminhos relativos
+ao próprio YAML. As configurações em `config/` e `experiments/config/` são
+preservadas como perfis de compatibilidade dos comandos antigos. Não são
+links: seus caminhos e defaults históricos permanecem intactos. Edite a
+configuração passada explicitamente no comando que está usando.
+
+O runner, a fábrica, os controladores, referências e funções numéricas dos
+plots foram movidos. As funções de entrada receberam parâmetros de caminhos;
+leitura de arquivos/criação de pastas dos plots passou para a execução explícita.
+Os controladores agora são importados sob demanda pela fábrica.
+
+## Saídas
+
+Novos comandos usam `runs/<tipo>/<run_id>` e recusam reutilizar uma pasta de
+avaliação/treino. Os comandos antigos continuam com seus destinos históricos.
+`run_oceans.py` foi convertido do antigo texto de shell para uma entrada Python
+válida que executa o treino de cinco seeds pela nova CLI.
+
+Os CSVs não foram convertidos para um schema universal. Metadados extras ficam
+em YAML, e famílias de plots diferentes continuam lendo seus formatos originais.
+Os temporizadores preservam seu escopo; valores de CPU/wall time variam entre
+execuções e não são usados como critério de igualdade numérica.
+
+## Verificação da migração
+
+Na migração foram realizados:
+
+- 27 testes de dinâmica, ondas e contratos de workflows.
+- Reexecução determinística de 100 s do agente `bluerov_ppo.zip`: CSV exatamente
+  igual ao resultado anterior e PNG idêntico pixel a pixel.
+- Comparação antes/depois de station keeping e trajetória, com duas repetições
+  curtas de PID/SMC/PPO: dados, ações e erros idênticos, excluindo temporizadores.
+- Comparação curta de NMPC antes/depois: ações, estados e erros idênticos em
+  station keeping e trajetória, excluindo temporizadores.
+- Os cinco plots do artigo: PNGs idênticos pixel a pixel e tabelas idênticas em
+  uma fixture congelada com quatro controladores, dois cenários e duas trajetórias.
+- Station keeping, custo de station keeping, path tracking legado, custo,
+  tradeoff e violin: todos os PNGs comparados idênticos pixel a pixel e CSVs
+  de tabelas idênticos, usando os mesmos dados de entrada.
+- Gráficos espaciais/representativos de trajetórias e tabelas: igualdade exata;
+  comparação FTC e curvas individuais de treino: canvases renderizados idênticos.
+- Funções de cálculo e desenho dessas famílias mantêm a mesma árvore sintática;
+  só suas entradas e a preparação de caminhos foram reorganizadas.
+- Teste curto da CLI de treino com duas seeds, oito passos por seed, salvando
+  política/normalizador/manifestações separadamente.
+
+Essas comparações foram feitas no mesmo ambiente de fontes, NumPy e Matplotlib.
+Não implicam que valores temporais ou renderização entre versões diferentes de
+bibliotecas sejam idênticos. As figuras históricas não foram sobrescritas.

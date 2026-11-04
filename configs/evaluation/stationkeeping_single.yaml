@@ -1,0 +1,15 @@
+experiment:
+  mode: stationkeeping_single
+model: ../../bluerov_ppo.zip
+normalizer: ../../bluerov_vec_normalize.pkl
+dynamics: ../dynamics/dynamics_config.yaml
+target:
+- 0.0
+- 0.0
+- -2.0
+offset:
+- 0.2
+- -0.15
+- 0.08
+duration: 100.0
+seed: 42
