@@ -9,6 +9,13 @@ experiment:
 output:
   directory: results-severe/trajectory_experiments
 
+# Physical plant settings shared by all controllers in this campaign.
+# These are separate from controller prediction-model settings below.
+environment:
+  dynamics_config:
+    disturbance_model:
+      preset: std  # std | corrected; individual flags may override either preset
+
 controllers:
   - name: pid
     enabled: true

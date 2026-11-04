@@ -121,7 +121,10 @@ class BlueRov(gym.Env):
             self.dynamics.reset()
 
         self.reward_fn.reset()
-        return self._get_obs(), {}
+        return self._get_obs(), {
+            "disturbance_model": self.dynamics.disturbance_model.copy(),
+            "mechanics_model": self.dynamics.mechanics_model,
+        }
 
     def step(self, action):
         action = np.asarray(action, dtype=np.float32).reshape(-1)
@@ -187,6 +190,8 @@ class BlueRov(gym.Env):
         return obs, float(reward), terminated, truncated, info
 
     def _append_dynamics_info(self, info: dict):
+        info["disturbance_model"] = self.dynamics.disturbance_model.copy()
+        info["mechanics_model"] = self.dynamics.mechanics_model
         vector_keys = [
             "tau", "tau_wave", "tau_total", "thrusters", "nu_current",
             "nu_wave_raw", "nu_rel", "nu_dot", "coriolis_rb",

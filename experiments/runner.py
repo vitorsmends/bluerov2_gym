@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
+import yaml
 
 from .controllers.factory import ControllerFactory
 from .config_loader import load_yaml
@@ -122,6 +123,20 @@ class ExperimentRunner:
             disturbance.setdefault("default_scenario", external.get("default_scenario"))
             disturbance.setdefault("scenarios", external.get("scenarios", {}))
 
+    def _make_env(self, output_dir):
+        env = make_env(
+            render_mode=self.config["experiment"].get("render_mode"),
+            dynamics_config=self.config.get("environment", {}).get("dynamics_config"),
+        )
+        manifest = {
+            "config": self.config,
+            "resolved_disturbance_model": env.unwrapped.dynamics.disturbance_model.copy(),
+            "mechanics_model": env.unwrapped.dynamics.mechanics_model,
+        }
+        with (output_dir / "experiment_config.yaml").open("w", encoding="utf-8") as stream:
+            yaml.safe_dump(manifest, stream, sort_keys=False)
+        return env
+
     def run(self) -> None:
         mode = self.config["experiment"]["mode"].lower()
         if mode == "stationkeeping":
@@ -157,7 +172,7 @@ class ExperimentRunner:
                         position = np.asarray(target["pos"], dtype=float)
                         yaw_rad = np.deg2rad(float(target["yaw_deg"]))
                         reference = StationKeepingReference(position, yaw_rad)
-                        env = make_env(render_mode=exp.get("render_mode"))
+                        env = self._make_env(output_dir)
                         obs = _reset_with_jonswap(env, sea_params, seed)
                         obs = _set_stationkeeping_state(env, position, yaw_rad, offset=True)
                         controller = ControllerFactory.create(
@@ -264,7 +279,7 @@ class ExperimentRunner:
                 name = controller_cfg["name"].lower()
 
                 for trajectory in trajectories:
-                    env = make_env(render_mode=exp.get("render_mode"))
+                    env = self._make_env(output_dir)
                     try:
                         controller = ControllerFactory.create(
                             name, dynamics=env.unwrapped.dynamics,

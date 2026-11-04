@@ -68,6 +68,12 @@ download instructions.
 
 ## Environment
 
+Wave-model presets and independent ablations are documented in
+[docs/disturbance_models.md](docs/disturbance_models.md). The default `std`
+preset preserves the original wave model; `corrected` waves are opt-in.
+Mechanical fixes are enabled by default through `mechanics_model: corrected`;
+see [docs/mechanics.md](docs/mechanics.md) for equations and legacy reproduction.
+
 State:
 
     [x,y,z,roll,pitch,yaw,u,v,w,p,q,r]

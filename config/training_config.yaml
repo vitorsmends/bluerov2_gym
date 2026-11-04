@@ -26,6 +26,11 @@ environment:
         bonus: 1.0
   dynamics_config_file: dynamics_config.yaml
   dynamics_config: {}
+  # Example ablation (overrides dynamics_config_file):
+  # dynamics_config:
+  #   disturbance_model:
+  #     preset: std
+  #     normalize_spectrum: true
 
 paths:
   tensorboard_log: ./bluerov_tensorboard/

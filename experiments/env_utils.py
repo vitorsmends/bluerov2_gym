@@ -26,13 +26,12 @@ if ENV_ID not in gym.envs.registry:
     )
 
 
-def make_env(render_mode=None, jonswap_params=None):
-    # CORREÇÃO: O novo construtor não aceita jonswap_params no gym.make.
-    # Carregamos as configs padrões do seu novo ambiente se necessário,
-    # mas mantemos o gym.make limpo usando apenas os parâmetros suportados.
+def make_env(render_mode=None, jonswap_params=None, dynamics_config=None):
     return gym.make(
         ENV_ID,
         render_mode=render_mode,
+        env_config={"jonswap": jonswap_params} if jonswap_params is not None else None,
+        dynamics_config=dynamics_config,
     )
 
 def scalar(value) -> float:

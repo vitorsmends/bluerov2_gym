@@ -24,6 +24,7 @@ from stable_baselines3 import __version__ as stable_baselines3_version
 from tqdm.auto import tqdm
 
 from bluerov2_gym.envs.core.config_utils import deep_merge, load_yaml
+from bluerov2_gym.envs.core.dynamics import Dynamics
 
 DEFAULT_CONFIG = {
     "environment": {
@@ -321,6 +322,12 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         if config_path is not None and not dynamics_path.is_absolute():
             dynamics_path = Path(config_path).expanduser().resolve().parent / dynamics_path
         dynamics_config = deep_merge(load_yaml(dynamics_path), dynamics_config)
+    resolved_disturbance = Dynamics.resolve_disturbance_model(
+        dynamics_config.get("disturbance_model")
+    )
+    dynamics_config["disturbance_model"] = resolved_disturbance
+    dynamics_config.setdefault("mechanics_model", "corrected")
+    print(f"Disturbance model: {resolved_disturbance}")
     env_section = config["environment"]
     paths = config["paths"]
 
@@ -378,6 +385,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         "gymnasium_version": str(gymnasium_version),
         "stable_baselines3_version": str(stable_baselines3_version),
         "seed": run_seed,
+        "resolved_dynamics_config": dynamics_config,
         "config": config,
     }
     temporary_manifest_path = manifest_path.with_suffix(f"{manifest_path.suffix}.tmp")

@@ -4,7 +4,12 @@ from bluerov2_gym.envs.core.config_utils import load_yaml
 
 class Dynamics:
     """
+
     BlueROV2 6-DoF dynamics with direct thruster commands.
+
+    World Z is positive up; velocities and applied wrenches are in BODY.
+    mechanics_model selects corrected (default) or historical std mechanics,
+    independently from the JONSWAP disturbance preset.
 
     Disturbance model:
         1. Directional JONSWAP + Linear Wave Theory:
@@ -30,6 +35,29 @@ class Dynamics:
         np.array([T1, T2, T3, T4, T5, T6])
     """
 
+    @staticmethod
+    def resolve_disturbance_model(config=None):
+        """Expand a preset and explicit ablation flags without modifying inputs."""
+        config = dict(config or {})
+        preset = config.pop("preset", "std")
+        presets = {
+            "std": dict(normalize_spectrum=False, finite_depth=False,
+                        body_frame=False, wave_filter=True, noise_filter=True),
+            "corrected": dict(normalize_spectrum=True, finite_depth=True,
+                              body_frame=True, wave_filter=False, noise_filter=False),
+        }
+        if preset not in presets:
+            raise ValueError(f"Unknown disturbance preset: {preset!r}. Use std or corrected.")
+        flags = presets[preset].copy()
+        unknown = set(config) - set(flags)
+        if unknown:
+            raise ValueError(f"Unknown disturbance flags: {sorted(unknown)}")
+        for key, value in config.items():
+            if not isinstance(value, bool):
+                raise ValueError(f"disturbance_model.{key} must be a boolean.")
+            flags[key] = value
+        return {"preset": preset, **flags}
+
     def __init__(
         self,
         jonswap_params: dict | None = None,
@@ -38,6 +66,10 @@ class Dynamics:
         if isinstance(dynamics_config, (str, bytes)):
             dynamics_config = load_yaml(dynamics_config)
         cfg = dynamics_config or {}
+        self.mechanics_model = cfg.get("mechanics_model", "corrected")
+        if self.mechanics_model not in {"std", "corrected"}:
+            raise ValueError("mechanics_model must be std or corrected.")
+        self.disturbance_model = self.resolve_disturbance_model(cfg.get("disturbance_model"))
 
         self.dt = float(cfg.get("dt", 0.1))
         self.rho = float(cfg.get("rho", 1000.0))
@@ -99,7 +131,10 @@ class Dynamics:
             dtype=float,
         )
         self.D_quad = np.asarray(
-            hydrodynamics.get("quadratic_damping", [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0]),
+            hydrodynamics.get("quadratic_damping",
+                [17.77, 125.9, 72.36, 0.1246, 0.1246, 0.1857]
+                if self.mechanics_model == "corrected" else
+                [33.8, 54.26875, 73.37135, 40.0, 40.0, 40.0]),
             dtype=float,
         )
 
@@ -157,7 +192,11 @@ class Dynamics:
         S_rg = self._skew(self.r_g)
 
         upper = np.hstack((self.m * I3, -self.m * S_rg))
-        lower = np.hstack((self.m * S_rg, self.I_g))
+        # Configured inertia is about the lumped vehicle CG, expressed in
+        # body axes. Transfer it to the body origin by the parallel-axis rule.
+        self.I_origin = (self.I_g - self.m * S_rg @ S_rg
+                         if self.mechanics_model == "corrected" else self.I_g.copy())
+        lower = np.hstack((self.m * S_rg, self.I_origin))
 
         return np.vstack((upper, lower))
 
@@ -168,8 +207,12 @@ class Dynamics:
         S_v = self._skew(v)
         S_w = self._skew(omega)
 
-        upper = np.hstack((S_w, S_v))
-        lower = np.hstack((np.zeros((3, 3)), S_w))
+        if self.mechanics_model == "corrected":
+            upper = np.hstack((S_w, np.zeros((3, 3))))
+            lower = np.hstack((S_v, S_w))
+        else:
+            upper = np.hstack((S_w, S_v))
+            lower = np.hstack((np.zeros((3, 3)), S_w))
 
         return np.vstack((upper, lower))
 
@@ -243,6 +286,13 @@ class Dynamics:
         self.Tp = float(Tp)
         self.gamma = float(gamma)
         self.N = int(N)
+        if self.disturbance_model["normalize_spectrum"]:
+            if not np.isfinite(self.Hs) or self.Hs < 0:
+                raise ValueError("Hs must be finite and non-negative.")
+            if not np.isfinite(self.Tp) or self.Tp <= 0 or self.N < 1:
+                raise ValueError("Tp and N must be positive.")
+            if not np.isfinite(self.gamma) or self.gamma <= 0:
+                raise ValueError("gamma must be finite and positive.")
 
         self.wave_dir = np.array(wave_dir, dtype=float)
 
@@ -309,7 +359,7 @@ class Dynamics:
             )
 
             S = (
-                self.alpha_js
+                (1.0 if self.disturbance_model["normalize_spectrum"] else self.alpha_js)
                 * self.g**2
                 * omega**-5
                 * np.exp(-1.25 * (wp / omega) ** 4)
@@ -339,6 +389,18 @@ class Dynamics:
                     "S": float(S),
                 }
             )
+
+        if self.disturbance_model["normalize_spectrum"]:
+            # Normalize the retained discrete spectrum: m0 = (Hs/4)^2.
+            # Use a unit-alpha shape so alpha_js cannot change the target Hs.
+            shape = np.array([wave["S"] for wave in self._waves])
+            energy = float(np.sum(shape) * dw)
+            if not np.isfinite(energy) or energy <= 0:
+                raise ValueError("The discrete JONSWAP spectrum has no finite positive energy.")
+            spectrum = shape * ((self.Hs / 4.0)**2 / energy)
+            for wave, density in zip(self._waves, spectrum):
+                wave["S"] = float(density)
+                wave["A"] = float(np.sqrt(2.0 * density * dw))
 
     def set_jonswap_params(self, **kwargs):
         self.jonswap_params.update(kwargs)
@@ -410,8 +472,16 @@ class Dynamics:
             spatial_phase = k * (x * np.cos(theta) + y * np.sin(theta))
             arg = spatial_phase - omega * self._t + phase
 
-            cosh_ratio = np.cosh(k * (z + d)) / np.cosh(k * d)
-            sinh_ratio = np.sinh(k * (z + d)) / np.cosh(k * d)
+            if self.disturbance_model["finite_depth"]:
+                # Stable Airy ratios, including large kd (no cosh overflow).
+                denominator = -np.expm1(-2.0 * k * d)
+                upper = np.exp(k * z)
+                lower = np.exp(-k * (z + 2.0 * d))
+                cosh_ratio = (upper + lower) / denominator
+                sinh_ratio = (upper - lower) / denominator
+            else:
+                cosh_ratio = np.cosh(k * (z + d)) / np.cosh(k * d)
+                sinh_ratio = np.sinh(k * (z + d)) / np.cosh(k * d)
 
             eta_wave += A * np.cos(arg)
 
@@ -429,17 +499,23 @@ class Dynamics:
 
         noise = self.noise_std * self._rng.standard_normal(3)
 
-        self._noise_filt = (
-            (1.0 - self.alpha_noise) * self._noise_filt
-            + self.alpha_noise * noise
-        )
+        if self.disturbance_model["noise_filter"]:
+            self._noise_filt = (
+                (1.0 - self.alpha_noise) * self._noise_filt
+                + self.alpha_noise * noise
+            )
+        else:
+            self._noise_filt = noise
 
         nu_c_raw = nu_wave + self._noise_filt
 
-        self._nu_c_filt = (
-            (1.0 - self.alpha_wave) * self._nu_c_filt
-            + self.alpha_wave * nu_c_raw
-        )
+        if self.disturbance_model["wave_filter"]:
+            self._nu_c_filt = (
+                (1.0 - self.alpha_wave) * self._nu_c_filt
+                + self.alpha_wave * nu_c_raw
+            )
+        else:
+            self._nu_c_filt = nu_c_raw
 
         tau_wave = self._compute_wave_force(self._nu_c_filt)
 
@@ -468,6 +544,17 @@ class Dynamics:
         return tau, thrust
 
     def _restoring_forces(self, phi, theta):
+        if self.mechanics_model == "corrected":
+            # World Z points up. Rotate gravity and buoyancy into BODY;
+            # g_eta is their negative because the equation subtracts it.
+            up_body = np.array([-np.sin(theta),
+                                np.cos(theta) * np.sin(phi),
+                                np.cos(theta) * np.cos(phi)])
+            weight = -self.W * up_body
+            buoyancy = self.B_force * up_body
+            moment = np.cross(self.r_g, weight) + np.cross(self.r_b, buoyancy)
+            return -np.concatenate((weight + buoyancy, moment))
+
         weight_minus_buoyancy = self.W - self.B_force
 
         g_eta = np.array(
@@ -536,6 +623,23 @@ class Dynamics:
 
     def step(self, state, action):
         nu_c, tau_wave = self._jonswap_disturbance()
+
+        if self.disturbance_model["body_frame"]:
+            # Same rotation as the existing body-to-world kinematics. The
+            # world z convention is preserved; this flag only rotates axes.
+            phi, theta, psi = state["roll"], state["pitch"], state["yaw"]
+            cp, sp = np.cos(phi), np.sin(phi)
+            ct, st = np.cos(theta), np.sin(theta)
+            cy, sy = np.cos(psi), np.sin(psi)
+            rotation = np.array([
+                [cy*ct, cy*st*sp-sy*cp, cy*st*cp+sy*sp],
+                [sy*ct, sy*st*sp+cy*cp, sy*st*cp-cy*sp],
+                [-st, ct*sp, ct*cp],
+            ])
+            nu_c = rotation.T @ nu_c
+            # Gains and application point are defined in BODY.
+            tau_wave = self._compute_wave_force(nu_c)
+            self._last_tau_wave = tau_wave.copy()
 
         eta = np.array(
             [
