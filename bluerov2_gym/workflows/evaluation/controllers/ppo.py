@@ -23,8 +23,8 @@ class PPOController(BaseController):
         self,
         model_path: str = "ppo_trajectory_final",
         vecnormalize_path: str = "vec_normalize.pkl",
-        env_config_path: str = "config/blue_rov_config.yaml",
-        dynamics_config_path: str = "config/dynamics_config.yaml",
+        env_config_path: str = "configs/dynamics/blue_rov_config.yaml",
+        dynamics_config_path: str = "configs/dynamics/dynamics_config.yaml",
     ):
         self.model_path = self._resolve_file(model_path)
         self.vecnormalize_path = self._resolve_file(vecnormalize_path)

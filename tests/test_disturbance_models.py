@@ -120,7 +120,7 @@ class DisturbanceModelTests(unittest.TestCase):
                 model({'preset': 'corrected'}, **waves)
 
     def test_env_metadata_and_reset_overrides(self):
-        from experiments.env_utils import make_env
+        from bluerov2_gym.workflows.evaluation.env_utils import make_env
         env = make_env(dynamics_config={'disturbance_model': {'preset': 'corrected'}},
                        jonswap_params={'Hs': 0, 'noise_std': 0})
         try:

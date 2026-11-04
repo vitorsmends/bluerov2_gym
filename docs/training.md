@@ -51,7 +51,14 @@ groups:
 
 Cinco repetições do benchmark não são cinco treinamentos independentes.
 
-Os fluxos antigos `training/train.py` e `training/optmize.py` continuam válidos,
-com implementações em `workflows/training/legacy_train.py` e `optimize.py`.
-Eles mantêm seus parâmetros, nomes de estudos e destinos antigos; não são
-substituídos silenciosamente pelo treino com currículo.
+Os fluxos de treino anteriores com comportamentos próprios permanecem acessíveis
+somente pelos módulos canônicos, sem duplicatas na raiz:
+
+```bash
+python -m bluerov2_gym.workflows.training.legacy_train
+python -m bluerov2_gym.workflows.training.optimize
+```
+
+Eles mantêm seus parâmetros, nomes de estudos e destinos anteriores; não são
+substituídos silenciosamente pelo treino com currículo. A otimização requer
+as dependências opcionais `.[optimize]`.

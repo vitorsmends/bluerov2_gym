@@ -23,7 +23,7 @@ def configure(settings=None):
     elif settings.get('input_dir'):
         config_default = 'moderate'  # explicit paths below; no legacy YAML read
     else:
-        with (ROOT / 'experiments/ocean_environment.yaml').open() as stream:
+        with (ROOT / 'configs/evaluation/ocean.yaml').open() as stream:
             config_default = yaml.safe_load(stream)['default_scenario']
     INPUT_DIR = Path(settings.get("input_dir", ROOT / (f"results-{config_default}/stationkeeping")))
     OUTPUT_DIR = Path(settings.get("output_dir", ROOT / (f"results-{config_default}/plots_stationkeeping_cost_tradeoff")))

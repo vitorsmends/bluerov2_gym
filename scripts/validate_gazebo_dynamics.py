@@ -53,7 +53,7 @@ def main():
         [float(inertial['ixy']), float(inertial['iyy']), float(inertial['iyz'])],
         [float(inertial['ixz']), float(inertial['iyz']), float(inertial['izz'])],
     ])
-    d = Dynamics(dynamics_config=load_yaml(ROOT/'config/dynamics_config.yaml'))
+    d = Dynamics(dynamics_config=load_yaml(ROOT/'configs/dynamics/dynamics_config.yaml'))
     hydro = ET.parse(ref/'hydrodynamics.xacro').getroot().find('gazebo/plugin')
     for label, tags, actual in [
         ('added_mass', ['xDotU','yDotV','zDotW','kDotP','mDotQ','nDotR'], d.added_mass),

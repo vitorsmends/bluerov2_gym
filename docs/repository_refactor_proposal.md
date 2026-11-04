@@ -1,7 +1,8 @@
 # Proposta de organização: treino, avaliação e gráficos
 
 Status: implementada; consulte [migration.md](migration.md) para o mapa e as
-verificações realizadas. O texto abaixo registra a proposta original. O objetivo é reorganizar o acesso aos fluxos
+verificações realizadas. Os wrappers de compatibilidade foram removidos após
+a validação, conforme solicitado. O texto abaixo registra a proposta original. O objetivo é reorganizar o acesso aos fluxos
 existentes, preservando dinâmica, controladores, métricas, CSVs e figuras.
 
 ## Diagnóstico do checkout

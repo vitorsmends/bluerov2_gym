@@ -1,7 +1,4 @@
-"""Workflow contracts: selection, provenance, compatibility and data-only plotting."""
-from contextlib import redirect_stdout
-import importlib
-import io
+"""Workflow contracts: selection, provenance and data-only plotting."""
 from pathlib import Path
 import subprocess
 import sys
@@ -52,12 +49,9 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn('git_commit',yaml.safe_load((run/'manifest.yaml').read_text()))
             with self.assertRaises(FileExistsError):create_run('evaluation',{}, {},path)
 
-    def test_legacy_modules_are_aliases_not_duplicate_implementations(self):
-        for old,new in [('experiments.runner','evaluation.runner'),
-                        ('experiments.controllers.pid','evaluation.controllers.pid'),
-                        ('training.train_curriculum','training.curriculum'),
-                        ('plots.plot_tracking_error','plotting.article.plot_tracking_error')]:
-            self.assertIs(importlib.import_module(old),importlib.import_module('bluerov2_gym.workflows.'+new))
+    def test_old_entrypoint_directories_are_removed(self):
+        for directory in ['training', 'experiments', 'plots', 'config']:
+            self.assertFalse((ROOT/directory).exists())
 
     def test_plot_import_does_not_load_controllers_or_create_files(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -122,8 +116,8 @@ assert 'casadi' not in sys.modules
             self.assertEqual(Path(settings['output_dir']),(run/'figures/trajectory_spatial/severe').resolve())
             self.assertEqual(Path(settings['representative_output_dir']),(run/'figures/trajectory_spatial/severe/representative').resolve())
 
-    def test_compatibility_script_help_from_another_directory(self):
-        result=subprocess.run([sys.executable,str(ROOT/'training/train_curriculum.py'),'--help'],
+    def test_cli_help_from_another_directory(self):
+        result=subprocess.run([sys.executable,'-m','bluerov2_gym.workflows','train','--help'],
                                cwd='/tmp',capture_output=True,text=True,check=True)
         self.assertIn('--seeds',result.stdout)
 

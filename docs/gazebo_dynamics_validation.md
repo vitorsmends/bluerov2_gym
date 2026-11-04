@@ -9,7 +9,7 @@ O script compara o código atual, portanto já mostra esses termos corrigidos.
 Referências locais: `_references/bluerov2/bluerov2_description/urdf/`:
 `bluerov2.xacro`, `thrusters.xacro`, `hydrodynamics.xacro`, `sensors.xacro` e
 `demo_world.sdf`. Dinâmica auditada: `bluerov2_gym/envs/core/dynamics.py`, com e
-sem `config/dynamics_config.yaml`. A auditoria não modifica a mecânica do modelo.
+sem `configs/dynamics/dynamics_config.yaml`. A auditoria não modifica a mecânica do modelo.
 
 ## Escopo e limitações
 
@@ -170,7 +170,7 @@ O problema de Coriolis é independente da escolha correta desses coeficientes.
 Sem carregar o YAML, `Dynamics()` usa amortecimento quadrático diferente:
 `[33.8,54.26875,73.37135,40,40,40]`. Em roll a `0.5 rad/s`, só a parcela
 quadrática passa de `0.03115` para `10 N m`. `gym.make('BlueRov-v0')` não carrega
-automaticamente `config/dynamics_config.yaml`; o runner antigo também não o
+automaticamente `configs/dynamics/dynamics_config.yaml`; o runner antigo também não o
 carregava. O preset de ondas não seleciona um conjunto de parâmetros mecânicos.
 
 ### 7. Volume, superfície e integração

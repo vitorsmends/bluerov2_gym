@@ -60,7 +60,7 @@ class MechanicsTests(unittest.TestCase):
 
     def test_default_coefficients_match_yaml(self):
         direct = Dynamics()
-        configured = Dynamics(dynamics_config=load_yaml('config/dynamics_config.yaml'))
+        configured = Dynamics(dynamics_config=load_yaml('configs/dynamics/dynamics_config.yaml'))
         for name in ['M_RB','M_A','D_lin','D_quad']:
             np.testing.assert_array_equal(getattr(direct,name), getattr(configured,name))
         nu = np.array([.3,-.2,.1,-.4,.5,-.6])

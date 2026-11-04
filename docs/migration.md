@@ -1,8 +1,9 @@
 # Migração dos workflows
 
-A implementação principal agora está em `bluerov2_gym/workflows`. Os arquivos
-anteriores são wrappers: ao importar, expõem o mesmo módulo canônico; ao executar,
-chamam sua entrada original. Não há duas cópias das fórmulas Python.
+A implementação principal está em `bluerov2_gym/workflows`. Após a validação da
+migração, os wrappers e diretórios antigos foram removidos. Use `bluerov` ou
+`python -m bluerov2_gym.workflows`. O mapa abaixo identifica os arquivos removidos
+e os módulos que preservam suas implementações.
 
 | Caminho antigo | Implementação principal |
 |---|---|
@@ -27,11 +28,9 @@ de projeto/auditoria; não fazem parte da avaliação comparativa.
 
 ## Configurações
 
-`configs/` é a interface principal para novos comandos, com caminhos relativos
-ao próprio YAML. As configurações em `config/` e `experiments/config/` são
-preservadas como perfis de compatibilidade dos comandos antigos. Não são
-links: seus caminhos e defaults históricos permanecem intactos. Edite a
-configuração passada explicitamente no comando que está usando.
+`configs/` é a única árvore de configuração ativa, com caminhos relativos ao
+próprio YAML. `config/` e `experiments/config/` foram removidos após a migração
+dos perfis. Edite a configuração passada explicitamente ao comando atual.
 
 O runner, a fábrica, os controladores, referências e funções numéricas dos
 plots foram movidos. As funções de entrada receberam parâmetros de caminhos;
@@ -41,9 +40,9 @@ Os controladores agora são importados sob demanda pela fábrica.
 ## Saídas
 
 Novos comandos usam `runs/<tipo>/<run_id>` e recusam reutilizar uma pasta de
-avaliação/treino. Os comandos antigos continuam com seus destinos históricos.
-`run_oceans.py` foi convertido do antigo texto de shell para uma entrada Python
-válida que executa o treino de cinco seeds pela nova CLI.
+avaliação/treino. Os módulos canônicos de comportamentos legados mantêm seus destinos próprios.
+O atalho redundante `run_oceans.py` foi removido; use `bluerov train` com
+`--seeds 42 43 44 45 46`.
 
 Os CSVs não foram convertidos para um schema universal. Metadados extras ficam
 em YAML, e famílias de plots diferentes continuam lendo seus formatos originais.

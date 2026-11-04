@@ -6,7 +6,7 @@ comportamento anterior das ondas. A mecânica é selecionada separadamente por
 `corrected` seleciona cinco mudanças no modelo
 de ondas, sem alterar os parâmetros mecânicos do ROV.
 
-No `config/dynamics_config.yaml`:
+No `configs/dynamics/dynamics_config.yaml`:
 
 ```yaml
 disturbance_model:
@@ -41,20 +41,20 @@ disturbance_model:
 
 ## Treino por currículo
 
-Em uma cópia de `config/training_config.yaml`, sobrescreva os parâmetros do
+Em uma cópia de `configs/training/curriculum.yaml`, sobrescreva os parâmetros do
 arquivo de dinâmica pelo bloco inline:
 
 ```yaml
 environment:
   # Preserve as demais entradas environment da configuração original.
-  dynamics_config_file: dynamics_config.yaml
+  dynamics_config_file: ../dynamics/dynamics_config.yaml
   dynamics_config:
     disturbance_model:
       preset: std
       normalize_spectrum: true
 ```
 
-Execute `python -m training.train_curriculum --config config/minha_ablacao.yaml`.
+Execute `bluerov train --config configs/training/minha_ablacao.yaml`.
 Dê nomes/diretórios distintos a `paths.model_name`, `paths.vecnormalize_name`,
 `paths.model_dir` e `training.tb_log_name` para separar as execuções. Use o mesmo
 seed, currículo e orçamento de treino entre comparações. As flags não são
@@ -66,7 +66,7 @@ aparecem no console e em `info['disturbance_model']` no reset e no step do Gym.
 
 ## Experimentos
 
-Em `experiments/config/experiment.yaml`, use o bloco `environment.dynamics_config`
+Em `configs/evaluation/trajectory_comparison.yaml`, use o bloco `environment.dynamics_config`
 para configurar a planta compartilhada pelos controladores:
 
 ```yaml

@@ -23,7 +23,7 @@ def main(argv=None, make_plots=True):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--model', default='bluerov_ppo.zip')
     parser.add_argument('--normalizer', default='bluerov_vec_normalize.pkl')
-    parser.add_argument('--dynamics', default='config/dynamics_config.yaml')
+    parser.add_argument('--dynamics', default='configs/dynamics/dynamics_config.yaml')
     parser.add_argument('--target', type=float, nargs=3, default=[0.,0.,-2.])
     parser.add_argument('--offset', type=float, nargs=3, default=[.2,-.15,.08])
     parser.add_argument('--duration', type=float, default=100.)

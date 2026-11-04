@@ -21,7 +21,7 @@ O modo `corrected`:
 - calcula peso/empuxo em BODY a partir de forças verticais no mundo e momentos
   `r_g x F_weight + r_b x F_buoyancy`, incluindo centros fora do eixo Z;
 - usa, quando não há override, o mesmo amortecimento quadrático que
-  `config/dynamics_config.yaml` e os coeficientes ativos da referência Gazebo.
+  `configs/dynamics/dynamics_config.yaml` e os coeficientes ativos da referência Gazebo.
 
 A força hidrostática é armazenada com sinal oposto em `restoring`, pois a equação
 subtrai esse vetor. Um veículo alinhado com empuxo maior que o peso acelera para

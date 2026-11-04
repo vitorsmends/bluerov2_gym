@@ -81,7 +81,8 @@ bluerov plot-training --config configs/plots/training.yaml
 
 As rotinas de desenho e cálculo foram preservadas. A classe `PlotManager`
 organiza as suites e seus caminhos; cada família mantém suas métricas e estilos.
-Resultados antigos continuam nos diretórios originais. Novas execuções não
+As entradas antigas de scripts foram removidas. Resultados históricos continuam
+nos diretórios originais. Novas execuções não
 sobrescrevem automaticamente figuras de `oceans2026/figs`.
 
 ## Organização
@@ -97,8 +98,7 @@ bluerov2_gym/
 configs/                   # configuração principal, agrupada por tarefa
 runs/                      # novas execuções; dados locais, ignorados pelo Git
 control_design/            # projetos de controle e seu modelo próprio
-training/, experiments/, plots/, scripts/
-                           # comandos antigos compatíveis
+scripts/                   # auditoria física específica
 ```
 
 [Guia rápido](docs/quickstart.md) · [Mapa de migração](docs/migration.md) ·

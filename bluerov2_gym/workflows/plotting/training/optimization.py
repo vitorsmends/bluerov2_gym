@@ -1,11 +1,8 @@
 from pathlib import Path
 import optuna
 
-# SCRIPT_DIR aponta para bluerov2_gym/examples
-SCRIPT_DIR = Path(__file__).resolve().parents[4] / "training"
-
-# Subimos um nível (.parent.parent) para apontar para a raiz: bluerov2_gym/
-BASE_DIR = SCRIPT_DIR.parent
+# Artifact locations are independent of the removed script directories.
+BASE_DIR = Path(__file__).resolve().parents[4]
 
 DB_PATH = BASE_DIR / "optuna_results" / "ppo_bluerov_optuna.db"
 OUTPUT_DIR = BASE_DIR / "optuna_plots"

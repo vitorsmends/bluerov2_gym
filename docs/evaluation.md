@@ -74,5 +74,6 @@ configuração em `controllers[].params` pertencem ao controlador e não trocam 
 planta por efeito colateral. A mecânica e o preset de ondas continuam separados.
 
 Não se pressupõe equivalência entre a avaliação isolada, o runner de campanhas
-e o antigo `training/test_with_plot.py`: cada um mantém suas condições e forma
-de registrar amostras. Os comandos legados continuam chamando suas rotinas.
+e `workflows/evaluation/legacy_stationkeeping.py`: cada um mantém suas condições
+e forma de registrar amostras. As entradas antigas da raiz foram removidas;
+use a CLI ou execute explicitamente o módulo canônico desejado.

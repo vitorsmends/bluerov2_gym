@@ -11,7 +11,7 @@ import numpy as np
 from gymnasium.envs.registration import register
 
 # Make the project root importable when running scripts directly from this
-# directory, e.g. `python experiments/run_ppo.py`.
+# directory, e.g. `python -m bluerov2_gym.workflows`.
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))

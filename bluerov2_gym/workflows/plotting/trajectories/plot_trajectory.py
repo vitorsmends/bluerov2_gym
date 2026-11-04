@@ -396,7 +396,7 @@ def main(argv=None, settings=None):
     args = build_parser().parse_args(argv)
     ocean_config = {}
     if not settings.get("scenario") and not args.scenario:
-        with (ROOT / "experiments/ocean_environment.yaml").open("r", encoding="utf-8") as stream:
+        with (ROOT / "configs/evaluation/ocean.yaml").open("r", encoding="utf-8") as stream:
             ocean_config = yaml.safe_load(stream)
     scenario = settings.get("scenario") or args.scenario or ocean_config.get("default_scenario", "moderate")
     INPUT_DIR = Path(settings.get("input_dir", ROOT / f"results-{scenario}/trajectory_experiments"))
