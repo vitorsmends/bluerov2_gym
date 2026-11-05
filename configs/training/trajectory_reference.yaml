@@ -1,0 +1,49 @@
+# Training recipe from 889a766; current physical and disturbance configuration.
+# No curriculum, no implicit episode TimeLimit, no goal_frame adapter.
+reference:
+  commit: 889a766e4615098659a2f923782a1a56f921edd3
+  path: experiments_traj/train_ppo.py
+  sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
+  scope: Training/reset/feedback/reward/control recipe only. Current dynamics and
+    disturbance remain unchanged.
+environment:
+  id: BlueRov-v0
+  entry_point: bluerov2_gym.workflows.training.trajectory_env:TrajectoryTrackingEnv
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config_file: ../dynamics/dynamics_config.yaml
+paths:
+  tensorboard_log: ../../artifacts/logs/tensorboard/
+  model_dir: ../../artifacts/models/trajectory/
+  model_name: ppo_trajectory_final
+  vecnormalize_name: vec_normalize.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_trajectory_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs: {}
+training:
+  task: trajectory_tracking
+  device: auto
+  total_timesteps: 1000000
+  seed: null
+  tb_log_name: PPO_BlueROV2_Trajectory

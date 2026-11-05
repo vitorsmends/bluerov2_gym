@@ -509,9 +509,9 @@ o mesmo passado como `--output` ao treinamento.
 
 ## Convenção de entrada do PPO na avaliação
 
-Nas avaliações dos treinos atuais, `params.observation_adapter: goal_frame`
-converte posição/orientação para um mundo virtual ancorado no alvo e mantém
-as velocidades relativas no referencial BODY. O modo `legacy` permanece
-selecionável para reproduzir resultados antigos. A explicação matemática e
-os limites dessa adaptação para trajetórias móveis estão em
-[Convenção das observações do PPO](docs/ppo_observation_convention.md).
+O padrão foi restaurado para `params.observation_adapter: legacy`, reproduzindo
+o processamento de entrada do validador em `0436ce3`, com a física nova mantida.
+O modo `goal_frame` é um experimento explícito: ele também muda o objetivo de yaw
+e não é uma correção retrocompatível comprovada de uma política já treinada.
+Veja a [auditoria estática da validação](docs/validation_audit_0436.md) e a
+[derivação dos adaptadores](docs/ppo_observation_convention.md).

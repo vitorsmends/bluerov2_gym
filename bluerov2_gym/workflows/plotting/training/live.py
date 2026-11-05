@@ -35,8 +35,12 @@ class LiveTrainingPlot:
         phase_path = self.run / 'models/curriculum_status.yaml'
         runtime = read_yaml(phase_path) if phase_path.is_file() else None
         phase, sea, boundaries = training_phase(self.config, latest, runtime)
+        reward_tag = ('rollout/ep_rew_mean' if 'rollout/ep_rew_mean' in metrics
+                      else 'rollout/reward_mean_per_step')
+        reward_label = ('Reward médio por episódio' if reward_tag == 'rollout/ep_rew_mean'
+                        else 'Reward bruto médio por passo')
         specifications = [
-            [('rollout/ep_rew_mean', 'Reward médio por episódio', '#59A14F')],
+            [(reward_tag, reward_label, '#59A14F')],
             [('rollout/position_error_mean_m', 'Erro médio', '#4E79A7'),
              ('rollout/position_error_rmse_m', 'RMSE', '#E15759')],
         ]
@@ -62,7 +66,7 @@ class LiveTrainingPlot:
             else:
                 ax.text(.5, .5, 'Aguardando registros desta métrica no TensorBoard…',
                         ha='center', va='center', transform=ax.transAxes)
-        self.axes[0].set_ylabel('Reward por episódio')
+        self.axes[0].set_ylabel(reward_label)
         self.axes[1].set_ylabel('Erro euclidiano (m)')
         self.axes[1].set_xlabel('Passos de interação com o ambiente')
         self.fig.suptitle(f'{self.run.name} — {latest:,} passos registrados\n'

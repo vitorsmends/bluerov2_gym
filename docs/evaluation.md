@@ -127,12 +127,9 @@ Essa campanha avalia o agente existente sem retreiná-lo.
 
 ## Convenção das observações do PPO
 
-O controlador PPO agora usa `params.observation_adapter: goal_frame` por padrão.
-O adaptador transforma o estado para um mundo virtual ancorado na posição/yaw
-do alvo e desconta as três velocidades de referência no BODY correto antes da
-normalização. `legacy` reproduz a transformação antiga. As configurações com
-snapshot de treinamento selecionam `goal_frame` explicitamente; as campanhas
-antigas sem snapshot mantêm `legacy` para rastreabilidade.
-Veja a [derivação matemática e as limitações para trajetórias móveis](ppo_observation_convention.md).
-Essa mudança corrige a convenção de entrada, sem alterar treinamento, recompensa,
-física ou normalizador e sem garantir, por si só, desempenho equivalente no tracking.
+O controlador usa `params.observation_adapter: legacy` por padrão, restaurando
+o cálculo de 0436ce3. A física nova e o normalizador pareado são mantidos.
+`goal_frame` está disponível como experimento explícito e não como correção
+retrocompatível de desempenho garantido.
+Veja a [auditoria das mudanças na validação](validation_audit_0436.md) e a
+[derivação matemática dos adaptadores](ppo_observation_convention.md).

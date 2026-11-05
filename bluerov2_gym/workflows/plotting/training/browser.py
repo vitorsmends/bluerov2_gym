@@ -15,6 +15,7 @@ from .status import training_phase
 
 TAGS = {
     'reward': 'rollout/ep_rew_mean',
+    'reward_step': 'rollout/reward_mean_per_step',
     'error': 'rollout/position_error_mean_m',
     'rmse': 'rollout/position_error_rmse_m',
 }

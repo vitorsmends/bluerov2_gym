@@ -13,7 +13,11 @@ def main(settings=None):
     output=Path(settings['output_dir']);output.mkdir(parents=True,exist_ok=True)
     tables=Path(settings.get('table_dir',output/'tables'));tables.mkdir(parents=True,exist_ok=True)
     fig,axes=plt.subplots(3,1,figsize=(11,9),sharex=True,layout='constrained')
-    specifications=[('rollout/ep_rew_mean','Reward médio por episódio','#59A14F'),
+    reward_tag = ('rollout/ep_rew_mean' if 'rollout/ep_rew_mean' in metrics
+                  else 'rollout/reward_mean_per_step')
+    reward_label = ('Reward médio por episódio' if reward_tag == 'rollout/ep_rew_mean'
+                    else 'Reward bruto médio por passo')
+    specifications=[(reward_tag,reward_label,'#59A14F'),
                     ('rollout/position_error_mean_m','Erro euclidiano médio (m)','#4E79A7'),
                     ('rollout/ep_len_mean','Duração média do episódio (passos)','#B07AA1')]
     exported=[];summary={}
@@ -21,7 +25,7 @@ def main(settings=None):
     for ax,(tag,label,color) in zip(axes,specifications):
         ax.set_ylabel(label);ax.grid(alpha=.2)
         if tag not in metrics:
-            ax.text(.5,.5,'Erro euclidiano não foi registrado neste treino.\nConsulte a reavaliação dos checkpoints.',ha='center',va='center',transform=ax.transAxes)
+            ax.text(.5,.5,'Métrica ainda não registrada neste treino.',ha='center',va='center',transform=ax.transAxes)
             summary[tag]={'available':False};continue
         steps,values=metrics[tag]
         smoothed=moving_average(values,window)
@@ -44,7 +48,7 @@ def main(settings=None):
     for boundary in boundaries:
         for ax in axes:ax.axvline(boundary,color='gray',ls=':',lw=.8)
     axes[-1].set_xlabel('Passos de interação com o ambiente (não épocas internas do PPO)')
-    fig.suptitle('Evolução registrada durante o treinamento\nReward e duração são médias de episódios do SB3; pontilhados: transições do currículo')
+    fig.suptitle('Evolução registrada durante o treinamento\nReward conforme unidade indicada no eixo; pontilhados: transições do currículo')
     for extension in ['png','pdf']:fig.savefig(output/f'training_progress.{extension}',dpi=180)
     plt.close(fig)
     with (tables/'training_scalars.csv').open('w',newline='') as stream:

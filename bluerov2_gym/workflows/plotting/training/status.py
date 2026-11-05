@@ -46,6 +46,8 @@ def training_phase(config, step, runtime=None):
         progress = min(100., max(0., 100. * (step - start) / (end - start)))
         label = f'Fase {index + 1}/{len(lessons)}: {lesson["name"]} — {progress:.1f}% da fase'
         sea = merge(sea, merge(config.get('jonswap_defaults', {}), lesson.get('jonswap', {})))
+    elif task == 'trajectory_tracking':
+        label = 'Treinamento de trajetória — figura oito de 889a766 (sem currículo)'
     elif config:
         label = 'Cenário fixo — sem currículo'
     else:

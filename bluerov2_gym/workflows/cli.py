@@ -70,9 +70,9 @@ def train(args):
         config.setdefault('training', {})['device'] = args.device
     if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
     task=config.get('training',{}).get('task','stationkeeping_curriculum')
-    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum'}:
+    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum','trajectory_tracking'}:
         raise ValueError(f'Unknown training task: {task}')
-    if task=='stationkeeping_no_curriculum' and args.ablation:
+    if task!='stationkeeping_curriculum' and args.ablation:
         raise ValueError('Curriculum ablations require stationkeeping_curriculum.')
     from .training.curriculum import train_model_with_curriculum
     from .training.mastery import CurriculumEarlyStopped
@@ -85,7 +85,10 @@ def train(args):
         write_yaml(run/'config.resolved.yaml',config)
         try:
             with log_to(run/'logs/training.log'):
-                if task=='stationkeeping_no_curriculum':
+                if task=='trajectory_tracking':
+                    from .training.trajectory import train_trajectory
+                    train_trajectory(config)
+                elif task=='stationkeeping_no_curriculum':
                     from .training.no_curriculum import train_without_curriculum
                     train_without_curriculum(config)
                 else:

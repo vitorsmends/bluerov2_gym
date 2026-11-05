@@ -1,5 +1,7 @@
 # Convenção de observações do PPO: treino e avaliação
 
+**Revisão:** `legacy` voltou a ser o padrão para reproduzir a validação de `0436ce3`. As expressões de `goal_frame` abaixo descrevem um experimento de reparametrização, não uma correção retrocompatível comprovada. O usuário relatou piora após sua ativação. Consulte a [auditoria da validação](validation_audit_0436.md).
+
 Esta correção afeta somente a preparação das observações antes da normalização
 na avaliação. O treinamento curricular, a recompensa, a física e os critérios
 de avanço permanecem com seu comportamento atual. Não foram lidos resultados,
@@ -40,7 +42,7 @@ Para velocidade, com yaw de 90 graus, ROV parado e velocidade desejada WORLD
 [1,0,0], a referência equivale a [0,-1,0] em BODY. O erro correto é [0,1,0],
 enquanto o adaptador antigo entrega [-1,0,0].
 
-## Transformação corrigida: goal_frame
+## Experimento não padrão: goal_frame
 
 Define-se um mundo virtual G com origem no alvo e eixos orientados pelo yaw
 do alvo, psi_d. Para referências niveladas (roll_d=pitch_d=0):
@@ -76,7 +78,7 @@ normalizador pareado ao modelo, com atualização desativada.
 
 ## Limites no caso de trajetória móvel
 
-A transformação corrigida não torna tracking equivalente a estabilização.
+Essa reparametrização não torna tracking equivalente a estabilização e pode piorar o comportamento de uma política congelada.
 Quando psi_d varia, a derivada da posição virtual inclui um termo adicional:
 
     e_dot_G = R_WG^T (R_WB v_B - v_dW) - omega_GW_G × e_G
@@ -89,32 +91,26 @@ feedforward de aceleração e não garante melhora em trajetórias móveis.
 
 ## Seleção e rastreabilidade
 
-Na entrada PPO do YAML de avaliação:
+Nas avaliações, o padrão restaurado é:
 
 ```yaml
 - name: ppo
   enabled: true
   params:
-    observation_adapter: goal_frame
+    observation_adapter: legacy
     model_path: ...
     vecnormalize_path: ...
 ```
 
-`goal_frame` é o padrão do controlador e foi explicitado nas configurações
-com `environment.training_run`, incluindo `trajectory_com_curriculo.yaml` e
-`stationkeeping_com_curriculo.yaml`. A seleção aparece no inspect, no YAML
-resolvido da execução e no log de criação do PPO.
+Isso reproduz a transformação de 0436ce3, inclusive suas inconsistências de
+referenciais; a finalidade é recuperar a interface com a qual a política era
+avaliada antes, sem reescrever simultaneamente o objetivo de yaw. Todas as
+configurações de avaliação do repositório selecionam legacy explicitamente.
+A seleção aparece no inspect, no YAML resolvido e no log de criação do PPO.
 
-Para reproduzir o comportamento anterior, selecione `observation_adapter: legacy`.
-As configurações genéricas antigas sem snapshot de treino (`article.yaml`,
-`stationkeeping_comparison.yaml`, `ftc.yaml`) mantêm `legacy` explicitamente,
-para não alterar silenciosamente essas campanhas. Se forem usadas com um
-agente de station keeping treinado na convenção do ambiente, selecione
-`goal_frame` conscientemente.
-
-A avaliação de um único PPO também aceita `--observation-adapter goal_frame`
-ou `legacy`; no YAML de `stationkeeping_single` a opção fica na raiz.
-O treino e a reavaliação de checkpoints na origem continuam usando observações
-originais, sem adaptador, como antes. PID/SMC/NMPC e as métricas existentes não
-foram modificados. A questão distinta do erro de velocidade legado da comparação
-WORLD/BODY nas métricas permanece fora desta mudança.
+`goal_frame` pode ser selecionado como experimento. Não deve ser usado como
+argumento de que uma política já treinada necessariamente melhorará ou de que
+tracking ficará equivalente a station keeping.
+A avaliação single-policy aceita `--observation-adapter legacy` ou goal_frame;
+no YAML correspondente a opção fica na raiz. Treinamento e reavaliação de
+checkpoints na origem continuam usando observações originais, como antes.

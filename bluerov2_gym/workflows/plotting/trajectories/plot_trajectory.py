@@ -23,6 +23,7 @@ CONFIG = {
 THREE_D_CONTROLLERS = {"NMPC", "PPO"}
 
 TRAJECTORIES = {
+    'reference_889_figure_eight': 'Reference Figure Eight (889a766)',
     "square": "Square",
     "figure_eight_depth": "Figure Eight with Depth Variation",
     "circle": "Circle",

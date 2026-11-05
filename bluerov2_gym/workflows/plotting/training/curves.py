@@ -12,6 +12,7 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 METRICS = (
     ("rollout/ep_rew_mean", "Mean episode reward", "Episode reward", "episode_reward", "#59A14F"),
+    ('rollout/reward_mean_per_step', 'Mean raw reward per step', 'Reward per step', 'step_reward', '#59A14F'),
     ("rollout/ep_len_mean", "Mean episode length", "Steps per episode", "episode_length", "#4E79A7"),
     ("rollout/position_error_mean_m", "Mean position error per rollout", "Euclidean error (m)", "position_error_mean", "#4E79A7"),
     ("rollout/position_error_rmse_m", "RMS position error per rollout", "Euclidean RMS error (m)", "position_error_rmse", "#E15759"),

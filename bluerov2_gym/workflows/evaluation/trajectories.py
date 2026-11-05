@@ -3,6 +3,7 @@ from __future__ import annotations
 import numpy as np
 
 from .env_utils import wrap_angle
+from ..trajectory_reference import TrajectoryGenerator
 
 class BaseTrajectory:
     name = "base"
@@ -69,6 +70,20 @@ class FigureEightDepthTrajectory(BaseTrajectory):
             self.a * np.sin(s) * np.cos(s),
             self.depth + self.depth_amp * np.sin(0.5 * s),
         ])
+
+
+class Reference889Trajectory(BaseTrajectory):
+    """The training reference itself, with analytic derivatives and depth ramp."""
+    name = 'reference_889_figure_eight'
+
+    def __init__(self):
+        self.generator = TrajectoryGenerator()
+
+    def position(self, t):
+        return self.generator.get_state_at_time(t)[0]
+
+    def get_reference(self, t):
+        return self.generator.get_reference(t)
 
 
 class SquareTrajectory(BaseTrajectory):
@@ -196,6 +211,7 @@ class LetterBTrajectory(BaseTrajectory):
 
 
 TRAJECTORY_TYPES = {
+    'reference_889_figure_eight': Reference889Trajectory,
     "circle": CircleTrajectory,
     "figure_eight_depth": FigureEightDepthTrajectory,
     "square": SquareTrajectory,
