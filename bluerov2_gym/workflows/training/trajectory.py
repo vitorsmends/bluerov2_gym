@@ -76,6 +76,8 @@ def train_trajectory(config):
         manifest_path = models / f"{paths['model_name']}_config.yaml"
         manifest = dict(config=config, task='trajectory_tracking',
                         execution_device=device, observation_adapter='legacy',
+                        policy_kwargs=model.policy_kwargs,
+                        policy_architecture=str(model.policy),
                         effective_episode_limit=environment.get('max_episode_steps'))
         write_yaml(manifest_path, manifest)
         print('Task: trajectory_tracking | reference 889a766 | current dynamics/disturbance', flush=True)

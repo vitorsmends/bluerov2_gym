@@ -35,8 +35,8 @@ class LiveTrainingPlot:
         phase_path = self.run / 'models/curriculum_status.yaml'
         runtime = read_yaml(phase_path) if phase_path.is_file() else None
         phase, sea, boundaries = training_phase(self.config, latest, runtime)
-        reward_tag = ('rollout/ep_rew_mean' if 'rollout/ep_rew_mean' in metrics
-                      else 'rollout/reward_mean_per_step')
+        reward_tag = ('rollout/reward_mean_per_step' if 'rollout/reward_mean_per_step' in metrics
+                      else 'rollout/ep_rew_mean')
         reward_label = ('Reward médio por episódio' if reward_tag == 'rollout/ep_rew_mean'
                         else 'Reward bruto médio por passo')
         specifications = [

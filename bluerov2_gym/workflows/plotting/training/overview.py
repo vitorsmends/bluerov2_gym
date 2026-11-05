@@ -13,8 +13,8 @@ def main(settings=None):
     output=Path(settings['output_dir']);output.mkdir(parents=True,exist_ok=True)
     tables=Path(settings.get('table_dir',output/'tables'));tables.mkdir(parents=True,exist_ok=True)
     fig,axes=plt.subplots(3,1,figsize=(11,9),sharex=True,layout='constrained')
-    reward_tag = ('rollout/ep_rew_mean' if 'rollout/ep_rew_mean' in metrics
-                  else 'rollout/reward_mean_per_step')
+    reward_tag = ('rollout/reward_mean_per_step' if 'rollout/reward_mean_per_step' in metrics
+                  else 'rollout/ep_rew_mean')
     reward_label = ('Reward médio por episódio' if reward_tag == 'rollout/ep_rew_mean'
                     else 'Reward bruto médio por passo')
     specifications=[(reward_tag,reward_label,'#59A14F'),

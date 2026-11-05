@@ -1,5 +1,53 @@
 # Treinamento
 
+## Treinamento de trajetória recuperado de `889a766`
+
+O caminho que replica o script `experiments_traj/train_ppo.py` fornecido pelo
+usuário é `configs/training/trajectory_reference.yaml`. Ele usa a **arquitetura
+e o treinamento de trajetória originais**, sobre a dinâmica e os distúrbios
+atuais, sem alterar o simulador. É um treinador separado do station keeping.
+
+```bash
+bluerov train --config configs/training/trajectory_reference.yaml \
+  --output artifacts/training/trajectory_reference
+```
+
+Para exigir GPU, acrescente `--device cuda`. O perfil preserva `n_steps=2048`,
+`batch_size=64`, rede padrão da MultiInputPolicy, reset aleatório na figura oito,
+observação virtual original, recompensa de tracking e um milhão de passos.
+Não usa currículo nem a observação experimental goal_frame. Os pesos finais
+ficam em `models/ppo_trajectory_final.zip`, com `models/vec_normalize.pkl` pareado.
+
+Monitoramento:
+
+```bash
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/trajectory_reference
+```
+
+Avaliação contra PID e SMC, incluindo a referência analítica do próprio treino:
+
+```bash
+bluerov evaluate --config configs/evaluation/trajectory_reference.yaml \
+  --output artifacts/evaluation/trajectory_reference
+bluerov plot --run artifacts/evaluation/trajectory_reference --suite trajectories
+bluerov plot --run artifacts/evaluation/trajectory_reference --suite article
+```
+
+Para station keeping desse agente, use
+`configs/evaluation/stationkeeping_trajectory_reference.yaml` na avaliação e a
+suíte `stationkeeping` nos plots. Use pastas novas a cada execução.
+
+O tratamento original de feedback foi mantido inclusive nas suas particularidades:
+reset absoluto, steps com observação virtual, correção de velocidade apenas em u
+e ausência de limite temporal de episódio quando a subclasse é instanciada
+diretamente. A explicação completa de fidelidade, diferenças permitidas e comandos
+está em [Treinamento de trajetória de referência](trajectory_training_reference.md).
+
+O currículo segue disponível como padrão **para station keeping**, assim como
+o experimento sem currículo. Eles não são substitutos deste treino de trajetória.
+
+
 ## Treinamento validado: station keeping por currículo
 
 Referência: `training/train_curriculum.py` do commit

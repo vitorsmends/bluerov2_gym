@@ -133,3 +133,17 @@ o cálculo de 0436ce3. A física nova e o normalizador pareado são mantidos.
 retrocompatível de desempenho garantido.
 Veja a [auditoria das mudanças na validação](validation_audit_0436.md) e a
 [derivação matemática dos adaptadores](ppo_observation_convention.md).
+
+## Agente treinado pela receita de trajetória 889a766
+
+Use `configs/evaluation/trajectory_reference.yaml` para o modelo final de
+`artifacts/training/trajectory_reference/models/ppo_trajectory_final.zip` e
+`vec_normalize.pkl`. O protocolo inclui a referência analítica compartilhada
+`reference_889_figure_eight`, além de três trajetórias de transferência, e compara
+PPO, PID e SMC. Usa legacy antes da normalização, física herdada do novo treino
+e mar definido explicitamente no YAML de avaliação. O estado inicial da campanha
+continua sendo o do runner, zero: compartilhar a referência não significa
+reproduzir o reset aleatório do treinamento.
+
+Para um setpoint fixo, use `stationkeeping_trajectory_reference.yaml`.
+Veja [os comandos e as particularidades da receita](trajectory_training_reference.md).
