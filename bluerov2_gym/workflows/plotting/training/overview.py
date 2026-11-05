@@ -32,9 +32,16 @@ def main(settings=None):
         exported.extend([int(step),tag,float(value)] for step,value in zip(steps,values))
     config=settings.get('training_config',{})
     rollout=int(config.get('ppo',{}).get('n_steps',4096))
-    boundary=0
-    for index,phase in enumerate(config.get('curriculum',[])[:-1]):
-        boundary+=int(np.ceil(phase['timesteps']/rollout))*rollout
+    boundaries=[]
+    if config.get('curriculum_transition',{}).get('mode')=='success':
+        boundaries=[item['end_step'] for item in settings.get('curriculum_status',{}).get('history',[])
+                    if item.get('status')=='mastered' and item['index']<len(config.get('curriculum',[]))]
+    else:
+        boundary=0
+        for phase in config.get('curriculum',[])[:-1]:
+            boundary+=int(np.ceil(phase['timesteps']/rollout))*rollout
+            boundaries.append(boundary)
+    for boundary in boundaries:
         for ax in axes:ax.axvline(boundary,color='gray',ls=':',lw=.8)
     axes[-1].set_xlabel('Passos de interação com o ambiente (não épocas internas do PPO)')
     fig.suptitle('Evolução registrada durante o treinamento\nReward e duração são médias de episódios do SB3; pontilhados: transições do currículo')

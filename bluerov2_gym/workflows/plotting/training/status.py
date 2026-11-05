@@ -21,6 +21,10 @@ def training_phase(config, step, runtime=None):
                       f'{runtime.get("required_episodes", 3)} episódios consecutivos')
             if runtime.get('status') == 'budget_exhausted':
                 label += ' — limite atingido sem cumprir o objetivo'
+            if runtime.get('status') == 'early_stopped':
+                label += ' — early stopping por estagnação'
+            elif runtime.get('stale_windows') is not None:
+                label += f' — {runtime["stale_windows"]} janelas sem melhora'
         boundaries = [item['end_step'] for item in runtime.get('history', [])
                       if item['index'] < index and 'end_step' in item]
     elif lessons and config.get('curriculum_transition', {}).get('mode') == 'success':

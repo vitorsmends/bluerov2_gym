@@ -27,7 +27,7 @@ from tqdm.auto import tqdm
 from bluerov2_gym.envs.core.config_utils import deep_merge, load_yaml
 from bluerov2_gym.envs.core.dynamics import Dynamics
 from .metrics import PositionErrorCallback
-from .mastery import StationkeepingMasteryCallback
+from .mastery import StationkeepingMasteryCallback, PlateauEarlyStoppingCallback, CurriculumEarlyStopped
 from .device import resolve_training_device, report_training_device
 
 DEFAULT_CONFIG = {
@@ -179,8 +179,8 @@ DEFAULT_CONFIG = {
 class TrainingProgressCallback(BaseCallback):
     def __init__(self, total_timesteps, phase_timesteps, phase_name, phase_index, n_phases, verbose=0):
         super().__init__(verbose)
-        self.total_timesteps_target = int(total_timesteps)
-        self.phase_timesteps_target = int(phase_timesteps)
+        self.total_timesteps_target = None if total_timesteps is None else int(total_timesteps)
+        self.phase_timesteps_target = None if phase_timesteps is None else int(phase_timesteps)
         self.phase_name = phase_name
         self.phase_index = phase_index
         self.n_phases = n_phases
@@ -192,14 +192,18 @@ class TrainingProgressCallback(BaseCallback):
 
     def _on_training_start(self):
         self.phase_start_num_timesteps = self.model.num_timesteps
-        self.last_global_n = min(self.model.num_timesteps, self.total_timesteps_target)
+        self.last_global_n = (self.model.num_timesteps if self.total_timesteps_target is None
+                              else min(self.model.num_timesteps, self.total_timesteps_target))
         self.last_phase_n = 0
         self.global_bar = tqdm(total=self.total_timesteps_target, initial=self.last_global_n, desc="Total training", unit="steps", dynamic_ncols=True, leave=True)
         self.phase_bar = tqdm(total=self.phase_timesteps_target, initial=0, desc=f"Phase {self.phase_index}/{self.n_phases}: {self.phase_name}", unit="steps", dynamic_ncols=True, leave=False)
 
     def _on_step(self):
-        current_global_n = min(self.model.num_timesteps, self.total_timesteps_target)
-        current_phase_n = min(self.model.num_timesteps - self.phase_start_num_timesteps, self.phase_timesteps_target)
+        current_global_n = (self.model.num_timesteps if self.total_timesteps_target is None
+                            else min(self.model.num_timesteps, self.total_timesteps_target))
+        phase_steps = self.model.num_timesteps - self.phase_start_num_timesteps
+        current_phase_n = (phase_steps if self.phase_timesteps_target is None
+                           else min(phase_steps, self.phase_timesteps_target))
         global_delta = current_global_n - self.last_global_n
         phase_delta = current_phase_n - self.last_phase_n
         if global_delta > 0:
@@ -212,7 +216,8 @@ class TrainingProgressCallback(BaseCallback):
 
     def _on_training_end(self):
         if self.phase_bar is not None:
-            remaining_phase = self.phase_timesteps_target - self.last_phase_n
+            remaining_phase = (0 if self.phase_timesteps_target is None
+                               else self.phase_timesteps_target - self.last_phase_n)
             if remaining_phase > 0:
                 self.phase_bar.update(remaining_phase)
             self.phase_bar.close()
@@ -289,7 +294,8 @@ def apply_ablation(config, ablation):
     elif ablation == "no_curriculum":
         final_stage = deepcopy(config["curriculum"][-1])
         final_stage["name"] = "Final sea state from start"
-        final_stage["timesteps"] = sum(stage["timesteps"] for stage in config["curriculum"])
+        if all('timesteps' in stage for stage in config['curriculum']):
+            final_stage["timesteps"] = sum(stage["timesteps"] for stage in config["curriculum"])
         config["curriculum"] = [final_stage]
     elif ablation == "no_direct_wave_force":
         for stage in config["curriculum"]:
@@ -448,14 +454,18 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
     for lesson_cfg in config["curriculum"]:
         lessons.append({
             "name": lesson_cfg["name"],
-            "timesteps": int(lesson_cfg["timesteps"]),
+            "timesteps": int(lesson_cfg["timesteps"]) if transition_mode == 'timesteps' else None,
             "jonswap": build_jonswap_params(config["jonswap_defaults"], lesson_cfg["jonswap"]),
         })
 
-    total_curriculum_timesteps = sum(lesson["timesteps"] for lesson in lessons)
+    total_curriculum_timesteps = (sum(lesson['timesteps'] for lesson in lessons)
+                                 if transition_mode == 'timesteps' else None)
     print("Iniciando treinamento estruturado por currículo...")
     print(f"Semente de treinamento: {run_seed}")
-    print(f"Total de timesteps planejado: {total_curriculum_timesteps:,}")
+    if total_curriculum_timesteps is None:
+        print('Treinamento por objetivo: sem limite de passos por fase.')
+    else:
+        print(f"Total de timesteps planejado: {total_curriculum_timesteps:,}")
 
     metrics_callback = PositionErrorCallback()
     phase_history = []
@@ -497,6 +507,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         )
         callbacks = [checkpoint_callback, progress_callback, metrics_callback]
         mastery = None
+        early_stopping = None
         if transition_mode == 'success':
             dt = float(dynamics_config.get('dt', env_config.get('dt', .1)))
             hold_steps = int(np.ceil(float(transition.get('hold_seconds', 10.)) / dt))
@@ -509,12 +520,31 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
             mastery = StationkeepingMasteryCallback(
                 float(radius), hold_steps, phase_status['required_episodes'], report_mastery)
             callbacks.append(mastery)
+            early_config = transition.get('early_stopping', {})
+            if early_config.get('enabled', False):
+                def report_plateau(value, improved):
+                    phase_status.update(step=model.num_timesteps,
+                                        stale_windows=value.stale_windows,
+                                        best_error_m=value.best_error_m)
+                    if improved:
+                        model.save(str(model_dir / f'{model_path.name}_phase_{index+1}_best'))
+                        env.save(str(model_dir / f'{vecnorm_path.stem}_phase_{index+1}_best.pkl'))
+                    write_phase_status(phase_status)
+                early_stopping = PlateauEarlyStoppingCallback(
+                    window_episodes=early_config.get('window_episodes', 20),
+                    patience_windows=early_config.get('patience_windows', 10),
+                    min_delta_m=early_config.get('min_delta_m', .01),
+                    warmup_episodes=early_config.get('warmup_episodes', 40),
+                    report=report_plateau)
+                callbacks.append(early_stopping)
             print(f'[CURRICULUM] Advance only after {mastery.required_episodes} consecutive '
                   f'episodes with final {hold_steps} steps below {radius} m. '
-                  f'Phase step budget: {lesson["timesteps"]:,}.', flush=True)
+                  'No phase step limit.', flush=True)
         callback = CallbackList(callbacks)
         model.learn(
-            total_timesteps=lesson["timesteps"],
+            # SB3's loop accepts an unbounded horizon; stopping is controlled
+            # by callbacks. No repeated learn() calls or optimizer resets.
+            total_timesteps=float('inf') if mastery else lesson['timesteps'],
             callback=callback,
             tb_log_name=run_name,
             reset_num_timesteps=is_first_iteration,
@@ -522,7 +552,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         is_first_iteration = False
         phase_status.update(step=model.num_timesteps, end_step=model.num_timesteps,
                             status='mastered' if mastery and mastery.mastered else
-                                   'budget_exhausted' if mastery else 'completed')
+                                   'early_stopped' if mastery else 'completed')
         phase_history.append(dict(phase_status))
         write_phase_status(phase_status)
         if mastery is not None and not mastery.mastered:
@@ -531,8 +561,8 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
             model.save(str(model_dir / f'{model_path.name}_phase_{index+1}_incomplete'))
             env.save(str(model_dir / f'{vecnorm_path.stem}_phase_{index+1}_incomplete.pkl'))
             env.close()
-            raise RuntimeError(f'Curriculum stopped at phase {index+1}: goal not achieved '
-                               f'within its step budget. No advance to the next sea.')
+            raise CurriculumEarlyStopped(f'Curriculum stopped at phase {index+1} for '
+                                         'stagnation. No advance to the next sea.')
 
     print("Treinamento por currículo finalizado com sucesso.")
     model.save(str(model_path))

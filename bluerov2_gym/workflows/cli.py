@@ -74,6 +74,7 @@ def train(args):
     if task=='stationkeeping_no_curriculum' and args.ablation:
         raise ValueError('Curriculum ablations require stationkeeping_curriculum.')
     from .training.curriculum import train_model_with_curriculum
+    from .training.mastery import CurriculumEarlyStopped
     for seed in seeds:
         config['training']['seed']=seed
         output=Path(args.output)/f'seed_{seed}' if args.output and len(seeds)>1 else args.output
@@ -95,6 +96,9 @@ def train(args):
                 effective=read_yaml(manifests[0])
                 write_yaml(run/'config.resolved.yaml',effective['config'])
             update_manifest(run,status='completed',training_seed=seed,ablation=args.ablation)
+        except CurriculumEarlyStopped as error:
+            update_manifest(run,status='early_stopped',reason=str(error),training_seed=seed)
+            print(f'Early stopping: {error}')
         except BaseException as error:
             update_manifest(run,status='failed',error=str(error));raise
         print(f'Run: {run}')

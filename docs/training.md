@@ -8,34 +8,50 @@ A implementação usa a organização atual do pacote e a física corrigida.
 
 A receita preservada tem `n_steps=4096`, `batch_size=256`, redes separadas
 `pi=[256,256]` e `vf=[256,256]`, normalização de observações/reward e cinco fases:
+No Waves → Calm Sea → Moderate Sea → Severe Sea → Extreme Sea.
 
-| Fase | Limite de passos por fase |
-|---|---:|
-| No Waves | 200.000 |
-| Calm Sea | 400.000 |
-| Moderate Sea | 600.000 |
-| Severe Sea | 800.000 |
-| Extreme Sea | 1.000.000 |
-
-A mesma política, otimizador e `VecNormalize` continuam entre fases. A referência
-não fixa seed do PPO: `seed: null` mantém esse comportamento; `--seeds 42`
-é uma escolha explícita para controlar a aleatoriedade. A seed padrão do mar
-continua 42. A recompensa e as observações permanecem de station keeping na origem.
-O avanço agora depende do objetivo, conforme `curriculum_transition.mode: success`.
-O agente deve terminar três episódios consecutivos mantendo erro de posição abaixo
-do raio de sucesso do ambiente (0,20 m) em todos os passos dos 10 segundos finais,
+**Não existe limite de passos por fase no treinamento padrão.** A mesma política,
+otimizador e `VecNormalize` continuam aprendendo na fase atual até cumprir o
+objetivo: três episódios consecutivos mantendo erro de posição abaixo do raio
+de sucesso do ambiente (0,20 m) durante todos os passos dos 10 segundos finais,
 sem terminação por falha física. O critério usa episódios da coleta de treinamento,
 com exploração do PPO. `hold_seconds` e `consecutive_episodes` são configuráveis;
 `radius_m`, se informado, substitui o raio do objetivo.
 
-Os passos da tabela são limites de segurança, não uma autorização de avanço.
-Se a fase esgotar o orçamento sem cumprir o objetivo, o treino para, salva pesos
-e normalizador com sufixo `_phase_N_incomplete` e marca a execução como falha;
-não passa ao próximo mar. O orçamento pode ser ultrapassado até completar o rollout.
-Para reproduzir a regra antiga, selecione `curriculum_transition.mode: timesteps`:
-nesse modo, 3.000.000 passos solicitados resultam em 3.010.560 efetivos.
-O painel usa `models/curriculum_status.yaml` para mostrar a fase realmente ativa,
-em vez de inferir a fase pelos antigos limites de passos.
+O progresso mostra passos executados e a fase ativa, sem percentual ou ETA de um
+total artificial. Os checkpoints e métricas continuam sendo salvos normalmente.
+A referência não fixa seed do PPO: `seed: null` mantém esse comportamento;
+`--seeds 42` controla explicitamente a aleatoriedade. A seed padrão do mar é 42.
+
+O early stopping por estagnação é **opcional e desativado por padrão**:
+
+```yaml
+curriculum_transition:
+  mode: success
+  hold_seconds: 10.0
+  consecutive_episodes: 3
+  early_stopping:
+    enabled: false
+    window_episodes: 20
+    patience_windows: 10
+    min_delta_m: 0.01
+    warmup_episodes: 40
+```
+
+Quando habilitado, após o aquecimento de 40 episódios, compara o erro euclidiano
+médio em janelas não sobrepostas de 20 episódios. Uma melhora maior que 0,01 m
+renova a paciência. Dez janelas consecutivas sem essa melhora encerram o treino
+na fase atual, com status `early_stopped`, sem liberar o próximo mar. A paciência
+é reiniciada a cada fase. Episódios sem métricas válidas não geram uma avaliação
+de melhora. Cada melhora salva o par `_phase_N_best.zip` / normalizador
+`_phase_N_best.pkl`; ao parar, o estado mais recente é salvo com sufixo
+`_phase_N_incomplete`, sem substituir o modelo final de um currículo concluído.
+
+A regra antiga por passos permanece somente em
+`configs/training/curriculum_timesteps.yaml`, para comparações históricas.
+Ela não é usada pelo comando de treinamento padrão.
+O painel e os plots usam `models/curriculum_status.yaml` para mostrar as mudanças
+de fase registradas, em vez de inferi-las por limites fixos de passos.
 
 ```bash
 bluerov train --config configs/training/curriculum.yaml \
@@ -77,14 +93,14 @@ bluerov train --config configs/training/no_curriculum.yaml \
 | Mar | Cinco fases progressivas | Fixo, parâmetros JONSWAP da configuração física |
 | `n_steps` / `batch_size` | 4096 / 256 | 2048 / 64 |
 | Rede | `pi`/`vf`: `[256,256]` | `[256,256]` |
-| Passos solicitados | 3.000.000 | 1.000.000 |
+| Condição de parada | Objetivo por fase; sem limite de passos | 1.000.000 passos |
 | Limite efetivo de episódio | Registro do ambiente (5.000 neste pacote) | 1.000 explícitos |
 
 Ambos usam a física corrigida, observações/reward de station keeping, checkpoints
 com normalizador, métricas euclidianas e progresso. O cenário fixo mantém a receita
 que produziu o experimento anterior; portanto, comparar diretamente os dois não
 isola apenas o efeito do currículo. Para esse estudo, alinhe hiperparâmetros,
-seed, orçamento e limite de episódio. A opção já existente `--ablation no_curriculum`
+seed, condições de parada e limite de episódio. A opção já existente `--ablation no_curriculum`
 sobre `curriculum.yaml` é outro experimento: mantém a receita curricular e usa
 seu mar final desde o início; não substitui o cenário fixo preservado.
 

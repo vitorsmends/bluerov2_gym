@@ -33,8 +33,13 @@ class CurriculumReferenceTests(unittest.TestCase):
     def test_ppo_normalization_curriculum_and_reward_match_user_reference(self):
         _, config = resolve(ROOT/'configs/training/curriculum.yaml')
         defaults = self.reference.DEFAULT_CONFIG
-        for key in ['ppo', 'vecnormalize', 'checkpoint', 'curriculum', 'jonswap_defaults', 'initial_jonswap']:
+        for key in ['ppo', 'vecnormalize', 'checkpoint', 'jonswap_defaults', 'initial_jonswap']:
             self.assertEqual(config[key], defaults[key], key)
+        expected_phases = [{k: v for k, v in phase.items() if k != 'timesteps'}
+                           for phase in defaults['curriculum']]
+        self.assertEqual(config['curriculum'], expected_phases)
+        _, historical = resolve(ROOT/'configs/training/curriculum_timesteps.yaml')
+        self.assertEqual(historical['curriculum'], defaults['curriculum'])
         original_yaml = yaml.safe_load(reference_source('config/training_config.yaml'))
         self.assertEqual(config['environment']['config'], original_yaml['environment']['config'])
         self.assertIsNone(config['training']['seed'])
@@ -49,7 +54,7 @@ class CurriculumReferenceTests(unittest.TestCase):
             self.assertEqual(ast.dump(nodes[0]), ast.dump(nodes[1]), name)
 
     def test_one_policy_and_normalizer_continue_across_the_same_five_phases(self):
-        _, config = resolve(ROOT/'configs/training/curriculum.yaml')
+        _, config = resolve(ROOT/'configs/training/curriculum_timesteps.yaml')
         traces = []
         constructors = []
         for module in [self.reference, curriculum]:

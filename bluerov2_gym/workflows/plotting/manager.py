@@ -54,6 +54,9 @@ class PlotManager:
                 settings.setdefault('input_dir',str(data))
             elif spec.family=='training':
                 settings.setdefault('training_config',self.resolved)
+                phase_status=self.run/'models/curriculum_status.yaml'
+                if phase_status.is_file():
+                    settings.setdefault('curriculum_status',read_yaml(phase_status))
                 settings.setdefault('log_dir',str(self.run/'logs/tensorboard'))
                 logs=[p for p in Path(settings['log_dir']).glob('*')
                       if p.is_dir() and list(p.glob('events.out.tfevents.*'))]
