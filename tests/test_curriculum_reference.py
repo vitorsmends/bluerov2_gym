@@ -61,7 +61,7 @@ class CurriculumReferenceTests(unittest.TestCase):
                     self.num_timesteps = 0
                     kwargs.setdefault('seed', None)
                     constructed.append({k: v for k, v in kwargs.items()
-                                        if k not in ['env', 'tensorboard_log']})
+                                        if k not in ['env', 'tensorboard_log', 'device']})
                     self.env_ids = []
                 def learn(self, total_timesteps, callback, tb_log_name, reset_num_timesteps):
                     self.env_ids.append(id(self.env))

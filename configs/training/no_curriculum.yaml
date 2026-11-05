@@ -47,6 +47,7 @@ ppo:
     - 256
 training:
   task: stationkeeping_no_curriculum
+  device: auto
   total_timesteps: 1000000
   seed: null
   tb_log_name: PPO_BlueROV2_NoCurriculum

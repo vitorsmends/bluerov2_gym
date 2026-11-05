@@ -44,6 +44,49 @@ BLUEROV_VENV=.venv-comparacao bash scripts/setup.sh
 source .venv-comparacao/bin/activate
 ```
 
+### GPU NVIDIA: detecção e uso no Dell G15
+
+O setup agora usa `uv --torch-backend auto` para selecionar o backend do PyTorch
+compatível com o hardware/driver. Se `nvidia-smi` encontra uma GPU e o PyTorch
+existente não oferece CUDA, o setup reinstala o pacote `torch`, mantendo a versão
+fixada. Ao final, mostra o dispositivo e testa uma operação real. Não instala o
+driver NVIDIA do sistema; se esse driver não estiver disponível/compatível, será
+necessário corrigir sua instalação. A seleção automática segue a
+[integração oficial uv/PyTorch](https://docs.astral.sh/uv/guides/integration/pytorch/).
+
+Para reparar uma instalação existente e conferir a GPU:
+
+```bash
+bash scripts/setup.sh --reinstall-torch
+source .venv-ppo-reference/bin/activate
+python -m bluerov2_gym.workflows.training.device --device cuda --check
+```
+
+Os dois treinadores usam `training.device: auto`: CUDA quando o PyTorch consegue
+acessá-la; CPU nos outros casos. Para exigir GPU e impedir fallback silencioso:
+
+```bash
+bluerov train --config configs/training/curriculum.yaml \
+  --device cuda --output artifacts/training/com_curriculo_cuda
+```
+
+Também é possível selecionar `--device cpu` ou `--device auto`. Os logs mostram
+`requested`, `selected`, versão/build CUDA do PyTorch e nome da GPU; o manifesto
+do modelo registra `execution_device`. Para consultar a utilização no Dell,
+execute `nvidia-smi -l 1` em outro terminal.
+
+A GPU executa a rede PPO e sua otimização; a dinâmica NumPy do ROV continua na CPU.
+A arquitetura, os hiperparâmetros e a física não são alterados pela seleção de
+dispositivo. Utilização baixa de GPU durante a coleta de rollouts pode ser normal:
+PPO com rede pequena e um único ambiente pode ser mais rápido em CPU, como observa a
+[documentação do SB3](https://stable-baselines3.readthedocs.io/en/master/modules/ppo.html).
+Compare os passos por segundo antes de concluir que CUDA acelera esse experimento.
+
+Para escolher explicitamente o backend no setup, use por exemplo
+`bash scripts/setup.sh --torch-backend=cpu --reinstall-torch`; backends CUDA
+específicos também podem ser passados nesse argumento, desde que tenham um wheel
+compatível com a versão de PyTorch fixada e com o driver.
+
 Depois do setup, execute o treinamento padrão com currículo e física nova:
 
 ```bash

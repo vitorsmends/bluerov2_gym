@@ -65,6 +65,8 @@ def evaluate(args):
 def train(args):
     requested,config=resolve(args.config)
     seeds=args.seeds or [config.get('training',{}).get('seed')]
+    if args.device is not None:
+        config.setdefault('training', {})['device'] = args.device
     if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
     task=config.get('training',{}).get('task','stationkeeping_curriculum')
     if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum'}:
@@ -128,6 +130,7 @@ def main(argv=None):
         if name=='train':
             p.add_argument('--seeds',type=int,nargs='+')
             p.add_argument('--ablation')
+            p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=None)
     for name in ['plot','plot-training']:
         p=commands.add_parser(name)
         p.add_argument('--run',type=Path)

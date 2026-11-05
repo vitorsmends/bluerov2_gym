@@ -68,6 +68,7 @@ training:
   tb_log_name: PPO_BlueROV2_Curriculum
   seed: null
   task: stationkeeping_curriculum
+  device: auto
 jonswap_defaults:
   directional_spread_deg: 25.0
   water_depth: 30.0

@@ -9,6 +9,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from .curriculum import TrainingProgressCallback
 from .metrics import PositionErrorCallback
+from .device import resolve_training_device, report_training_device
 from ..artifacts import write_yaml
 
 
@@ -30,8 +31,11 @@ def train_without_curriculum(config):
     try:
         params = dict(config['ppo'])
         policy = params.pop('policy')
+        requested_device = config['training'].get('device', params.pop('device', 'auto'))
+        selected_device = resolve_training_device(requested_device)
+        report_training_device(requested_device, selected_device)
         model = PPO(policy, env, seed=config['training'].get('seed'),
-                    tensorboard_log=paths['tensorboard_log'], **params)
+                    tensorboard_log=paths['tensorboard_log'], device=selected_device, **params)
         checkpoint = config['checkpoint']
         steps = int(config['training']['total_timesteps'])
         callback = CallbackList([
@@ -51,6 +55,7 @@ def train_without_curriculum(config):
         write_yaml(models / f"{paths['model_name']}_config.yaml", {
             'config': config, 'actual_timesteps': model.num_timesteps,
             'task': 'stationkeeping_no_curriculum',
+            'execution_device': selected_device,
         })
     finally:
         env.close()

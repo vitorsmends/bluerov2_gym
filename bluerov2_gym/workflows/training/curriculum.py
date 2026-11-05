@@ -28,6 +28,7 @@ from bluerov2_gym.envs.core.config_utils import deep_merge, load_yaml
 from bluerov2_gym.envs.core.dynamics import Dynamics
 from .metrics import PositionErrorCallback
 from .mastery import StationkeepingMasteryCallback
+from .device import resolve_training_device, report_training_device
 
 DEFAULT_CONFIG = {
     "environment": {
@@ -427,12 +428,19 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
     ppo_cfg = dict(config["ppo"])
     policy = ppo_cfg.pop("policy")
     verbose = ppo_cfg.pop("verbose")
+    requested_device = training_cfg.get('device', ppo_cfg.pop('device', 'auto'))
+    selected_device = resolve_training_device(requested_device)
+    report_training_device(requested_device, selected_device)
+    manifest['execution_device'] = selected_device
+    with manifest_path.open('w', encoding='utf-8') as stream:
+        yaml.safe_dump(manifest, stream, sort_keys=False)
     model = PPO(
         policy=policy,
         env=env,
         verbose=verbose,
         tensorboard_log=str(log_dir),
         seed=run_seed,
+        device=selected_device,
         **ppo_cfg,
     )
 
