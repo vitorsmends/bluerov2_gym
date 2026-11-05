@@ -77,3 +77,50 @@ Não se pressupõe equivalência entre a avaliação isolada, o runner de campan
 e `workflows/evaluation/legacy_stationkeeping.py`: cada um mantém suas condições
 e forma de registrar amostras. As entradas antigas da raiz foram removidas;
 use a CLI ou execute explicitamente o módulo canônico desejado.
+
+## Validar com a mesma dinâmica do treinamento
+
+```yaml
+environment:
+  training_run: ../../artifacts/training/my_train
+```
+
+O resolver carrega `config.resolved.yaml` desse treino e herda sua configuração
+de dinâmica e ambiente (limites, passo, etc.). Se overrides alterarem esses
+parâmetros, a execução falha antes de simular. Para uma ablação intencional,
+remova o vínculo e configure explicitamente as diferenças. A política e o
+normalizador continuam sendo selecionados por caminhos explícitos nos parâmetros
+PPO: use o par salvo na pasta `models` do mesmo treinamento.
+
+O preset mecânico e o preset de ondas são independentes. O treino `my_train`
+utilizou `mechanics_model: corrected` e ondas `std`; ele não habilitou as
+correções opcionais de JONSWAP. Condições do mar podem variar entre as etapas do
+currículo e os cenários de robustez da avaliação sem mudar as equações do modelo.
+
+## Comparar o treino fixo `stationkeeping_restored` com PID e SMC
+
+Essas configurações apontam explicitamente ao modelo e normalizador de
+`artifacts/training/stationkeeping_restored/models/` e herdam a dinâmica do
+snapshot desse treino. Incluem apenas PPO, PID e SMC. O cenário `training_sea`
+reproduz os parâmetros de mar desse treino fixo (Hs=2 m, Tp=12 s), com três
+repetições pareadas, seeds 42/43/44 e 100 segundos por execução.
+
+```bash
+source .venv-ppo-reference/bin/activate
+bluerov evaluate --config configs/evaluation/trajectory_stationkeeping_restored.yaml --output artifacts/evaluation/stationkeeping_restored_traj
+bluerov plot --run artifacts/evaluation/stationkeeping_restored_traj --suite trajectories
+bluerov plot --run artifacts/evaluation/stationkeeping_restored_traj --suite article
+bluerov evaluate --config configs/evaluation/stationkeeping_restored.yaml --output artifacts/evaluation/stationkeeping_restored_fixed
+bluerov plot --run artifacts/evaluation/stationkeeping_restored_fixed --suite stationkeeping
+```
+
+Trajetórias: quadrado, oito com profundidade e círculo. A suíte `trajectories`
+produz os plots espaciais, enquanto `article` produz as comparações de erro,
+RMSE, CPU e energia. Station keeping: um alvo `[0,0,-0.8]`, yaw zero, com
+perturbação inicial de posição/orientação definida pelo avaliador; a suíte
+`stationkeeping` produz os gráficos e tabelas próprios desse benchmark.
+Os resultados ficam nas pastas de avaliação indicadas, com figuras em `figures/`.
+Use pastas de saída novas a cada execução. Edite os YAMLs para outros alvos,
+trajetórias ou cenários; mudar o mar é um teste de robustez além do cenário de treino.
+O runner de station keeping percorre todos os cenários presentes em `scenarios`.
+Essa campanha avalia o agente existente sem retreiná-lo.

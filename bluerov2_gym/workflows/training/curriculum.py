@@ -26,6 +26,8 @@ from tqdm.auto import tqdm
 
 from bluerov2_gym.envs.core.config_utils import deep_merge, load_yaml
 from bluerov2_gym.envs.core.dynamics import Dynamics
+from .metrics import PositionErrorCallback
+from .mastery import StationkeepingMasteryCallback
 
 DEFAULT_CONFIG = {
     "environment": {
@@ -78,7 +80,7 @@ DEFAULT_CONFIG = {
     },
     "training": {
         "tb_log_name": "PPO_BlueROV2_Curriculum",
-        "seed": 42,
+        "seed": None,
     },
     "jonswap_defaults": {
         "directional_spread_deg": 25.0,
@@ -308,13 +310,19 @@ def apply_ablation(config, ablation):
 def train_model_with_curriculum(config_path=None, seed=None, separate_run=False, ablation=None):
     config = load_training_config(config_path)
     apply_ablation(config, ablation)
+    transition = config.get('curriculum_transition', {})
+    transition_mode = transition.get('mode', 'timesteps')
+    if transition_mode not in {'timesteps', 'success'}:
+        raise ValueError('curriculum_transition.mode must be timesteps or success.')
 
     training_cfg = config["training"]
-    run_seed = int(training_cfg.get("seed", 42) if seed is None else seed)
-    if run_seed < 0:
+    configured_seed = training_cfg.get("seed") if seed is None else seed
+    run_seed = None if configured_seed is None else int(configured_seed)
+    if run_seed is not None and run_seed < 0:
         raise ValueError("Training seeds must be non-negative integers.")
     training_cfg["seed"] = run_seed
-    config["jonswap_defaults"]["seed"] = run_seed
+    if run_seed is not None:
+        config["jonswap_defaults"]["seed"] = run_seed
 
     dynamics_config = config["environment"].get("dynamics_config", {})
     dynamics_config_file = config["environment"].get("dynamics_config_file")
@@ -328,6 +336,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
     )
     dynamics_config["disturbance_model"] = resolved_disturbance
     dynamics_config.setdefault("mechanics_model", "corrected")
+    config["environment"]["dynamics_config"] = dynamics_config
     print(f"Disturbance model: {resolved_disturbance}")
     env_section = config["environment"]
     paths = config["paths"]
@@ -440,6 +449,15 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
     print(f"Semente de treinamento: {run_seed}")
     print(f"Total de timesteps planejado: {total_curriculum_timesteps:,}")
 
+    metrics_callback = PositionErrorCallback()
+    phase_history = []
+    status_path = model_dir / 'curriculum_status.yaml'
+    def write_phase_status(status):
+        temporary = status_path.with_suffix('.tmp')
+        with temporary.open('w', encoding='utf-8') as stream:
+            yaml.safe_dump({**status, 'history': phase_history}, stream, sort_keys=False)
+        os.replace(temporary, status_path)
+
     is_first_iteration = True
     for index, lesson in enumerate(lessons):
         jonswap_params = lesson["jonswap"]
@@ -455,6 +473,13 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
 
         set_curriculum_level(env, jonswap_params)
         env.reset()
+        phase_start = model.num_timesteps
+        phase_status = dict(index=index + 1, name=lesson['name'],
+                            start_step=phase_start, step=phase_start,
+                            status='training', mode=transition_mode,
+                            successful_episodes=0,
+                            required_episodes=int(transition.get('consecutive_episodes', 3)))
+        write_phase_status(phase_status)
         progress_callback = TrainingProgressCallback(
             total_timesteps=total_curriculum_timesteps,
             phase_timesteps=lesson["timesteps"],
@@ -462,7 +487,24 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
             phase_index=index + 1,
             n_phases=len(lessons),
         )
-        callback = CallbackList([checkpoint_callback, progress_callback])
+        callbacks = [checkpoint_callback, progress_callback, metrics_callback]
+        mastery = None
+        if transition_mode == 'success':
+            dt = float(dynamics_config.get('dt', env_config.get('dt', .1)))
+            hold_steps = int(np.ceil(float(transition.get('hold_seconds', 10.)) / dt))
+            radius = transition.get('radius_m', env_config.get('reward', {}).get('success', {}).get('radius', .2))
+            def report_mastery(value):
+                phase_status.update(step=model.num_timesteps,
+                                    successful_episodes=value.streak,
+                                    completed_episodes=value.episodes)
+                write_phase_status(phase_status)
+            mastery = StationkeepingMasteryCallback(
+                float(radius), hold_steps, phase_status['required_episodes'], report_mastery)
+            callbacks.append(mastery)
+            print(f'[CURRICULUM] Advance only after {mastery.required_episodes} consecutive '
+                  f'episodes with final {hold_steps} steps below {radius} m. '
+                  f'Phase step budget: {lesson["timesteps"]:,}.', flush=True)
+        callback = CallbackList(callbacks)
         model.learn(
             total_timesteps=lesson["timesteps"],
             callback=callback,
@@ -470,6 +512,19 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
             reset_num_timesteps=is_first_iteration,
         )
         is_first_iteration = False
+        phase_status.update(step=model.num_timesteps, end_step=model.num_timesteps,
+                            status='mastered' if mastery and mastery.mastered else
+                                   'budget_exhausted' if mastery else 'completed')
+        phase_history.append(dict(phase_status))
+        write_phase_status(phase_status)
+        if mastery is not None and not mastery.mastered:
+            # Preserve the partial policy and its matching statistics without
+            # labelling it as a successfully completed final curriculum model.
+            model.save(str(model_dir / f'{model_path.name}_phase_{index+1}_incomplete'))
+            env.save(str(model_dir / f'{vecnorm_path.stem}_phase_{index+1}_incomplete.pkl'))
+            env.close()
+            raise RuntimeError(f'Curriculum stopped at phase {index+1}: goal not achieved '
+                               f'within its step budget. No advance to the next sea.')
 
     print("Treinamento por currículo finalizado com sucesso.")
     model.save(str(model_path))

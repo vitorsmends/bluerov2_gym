@@ -64,8 +64,13 @@ def evaluate(args):
 
 def train(args):
     requested,config=resolve(args.config)
-    seeds=args.seeds or [config.get('training',{}).get('seed',42)]
-    if len(set(seeds))!=len(seeds) or any(seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
+    seeds=args.seeds or [config.get('training',{}).get('seed')]
+    if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
+    task=config.get('training',{}).get('task','stationkeeping_curriculum')
+    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum'}:
+        raise ValueError(f'Unknown training task: {task}')
+    if task=='stationkeeping_no_curriculum' and args.ablation:
+        raise ValueError('Curriculum ablations require stationkeeping_curriculum.')
     from .training.curriculum import train_model_with_curriculum
     for seed in seeds:
         config['training']['seed']=seed
@@ -76,8 +81,12 @@ def train(args):
         write_yaml(run/'config.resolved.yaml',config)
         try:
             with log_to(run/'logs/training.log'):
-                train_model_with_curriculum(str(run/'config.resolved.yaml'),seed=seed,
-                    separate_run=bool(args.seeds),ablation=args.ablation)
+                if task=='stationkeeping_no_curriculum':
+                    from .training.no_curriculum import train_without_curriculum
+                    train_without_curriculum(config)
+                else:
+                    train_model_with_curriculum(str(run/'config.resolved.yaml'),seed=seed,
+                        separate_run=bool(args.seeds),ablation=args.ablation)
             # Trainer is authoritative for merged defaults and effective ablations.
             manifests=list((run/'models').glob('*_config.yaml'))
             if manifests:
@@ -127,6 +136,12 @@ def main(argv=None):
         p.add_argument('--plots',nargs='+')
         p.add_argument('--scenario')
         p.add_argument('--repetition-id',type=int)
+    checkpoints=commands.add_parser('evaluate-checkpoints')
+    checkpoints.add_argument('--training-run',required=True,type=Path)
+    checkpoints.add_argument('--steps',type=int,default=500)
+    checkpoints.add_argument('--seed',type=int,default=42)
+    checkpoints.add_argument('--stage',type=int,default=-1)
+    checkpoints.add_argument('--output',type=Path)
     export_parser=commands.add_parser('export-figures')
     export_parser.add_argument('--run',required=True,type=Path)
     export_parser.add_argument('--destination',required=True,type=Path)
@@ -139,6 +154,9 @@ def main(argv=None):
         elif args.command in {'plot','plot-training'}:
             if not args.run and not args.config:parser.error('plot requires --run or --config')
             plot(args)
+        elif args.command=='evaluate-checkpoints':
+            from .evaluation.checkpoints import evaluate_checkpoints
+            evaluate_checkpoints(args.training_run,args.steps,args.seed,args.stage,args.output)
         elif args.command=='export-figures':
             import shutil
             source=(args.run/'figures').resolve()

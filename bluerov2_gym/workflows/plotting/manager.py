@@ -50,9 +50,10 @@ class PlotManager:
                     if (data/scenario).is_dir():
                         settings.setdefault('scenario',scenario)
                         settings.setdefault('input_dir',str(data/scenario));break
-            elif spec.family in {'stationkeeping','single_policy','legacy_path_tracking'}:
+            elif spec.family in {'stationkeeping','single_policy','legacy_path_tracking','checkpoints'}:
                 settings.setdefault('input_dir',str(data))
             elif spec.family=='training':
+                settings.setdefault('training_config',self.resolved)
                 settings.setdefault('log_dir',str(self.run/'logs/tensorboard'))
                 logs=[p for p in Path(settings['log_dir']).glob('*')
                       if p.is_dir() and list(p.glob('events.out.tfevents.*'))]

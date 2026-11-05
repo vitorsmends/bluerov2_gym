@@ -1,0 +1,177 @@
+# Trained stationkeeping PPO versus PID/SMC on moving trajectories.
+# Uses the same physical snapshot AND fixed sea parameters as this training.
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 3
+  thrust_limit: 40.0
+  render_mode: null
+output: {}
+environment:
+  training_run: ../../artifacts/training/stationkeeping_restored
+controllers:
+- name: pid
+  enabled: true
+  params: {}
+- name: ppo
+  enabled: true
+  params:
+    model_path: ../../artifacts/training/stationkeeping_restored/models/bluerov_ppo.zip
+    vecnormalize_path: ../../artifacts/training/stationkeeping_restored/models/bluerov_vec_normalize.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+- name: smc
+  enabled: true
+  params: {}
+disturbance:
+  default_scenario: training_sea
+  scenarios:
+    training_sea:
+      Hs: 2.0
+      Tp: 12.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.5
+      - 0.5
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.7
+      alpha_wave: 0.02
+      noise_std: 0.01
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+trajectories:
+- name: square
+  enabled: true
+  params: {}
+- name: figure_eight_depth
+  enabled: true
+  params: {}
+- name: circle
+  enabled: true
+  params: {}
+stationkeeping:
+  targets:
+  - id: 1
+    name: center_forward
+    pos:
+    - 0.0
+    - 0.0
+    - -0.8
+    yaw_deg: 0.0
+  - id: 2
+    name: front
+    pos:
+    - 2.0
+    - 0.0
+    - -0.8
+    yaw_deg: 0.0
+  - id: 3
+    name: front_right
+    pos:
+    - 2.0
+    - 2.0
+    - -0.8
+    yaw_deg: 45.0
+  - id: 4
+    name: front_left
+    pos:
+    - 2.0
+    - -2.0
+    - -0.8
+    yaw_deg: -45.0
+  - id: 5
+    name: rear
+    pos:
+    - -2.0
+    - 0.0
+    - -0.8
+    yaw_deg: 180.0
+  - id: 6
+    name: rear_right
+    pos:
+    - -2.0
+    - 2.0
+    - -0.8
+    yaw_deg: 135.0
+  - id: 7
+    name: rear_left
+    pos:
+    - -2.0
+    - -2.0
+    - -0.8
+    yaw_deg: -135.0
+  - id: 8
+    name: shallow
+    pos:
+    - 1.5
+    - 0.0
+    - -0.4
+    yaw_deg: 90.0
+  - id: 9
+    name: mid_depth
+    pos:
+    - 0.0
+    - 2.5
+    - -1.5
+    yaw_deg: 90.0
+  - id: 10
+    name: deep
+    pos:
+    - 0.0
+    - -2.5
+    - -3.0
+    yaw_deg: -90.0
+  - id: 11
+    name: side_inspection
+    pos:
+    - 3.0
+    - 0.0
+    - -1.2
+    yaw_deg: 90.0
+  - id: 12
+    name: structure_view
+    pos:
+    - 3.0
+    - 3.0
+    - -2.0
+    yaw_deg: 225.0
+  - id: 13
+    name: far_corner
+    pos:
+    - 4.0
+    - -4.0
+    - -2.0
+    yaw_deg: 315.0
+  - id: 14
+    name: far_corner_opposite
+    pos:
+    - -4.0
+    - 4.0
+    - -2.0
+    yaw_deg: 135.0
+  - id: 15
+    name: deep_far
+    pos:
+    - 4.0
+    - 4.0
+    - -4.0
+    yaw_deg: 45.0

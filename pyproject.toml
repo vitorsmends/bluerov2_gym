@@ -28,7 +28,7 @@ bluerov = "bluerov2_gym.workflows.cli:main"
 include-package-data = true
 
 [tool.setuptools.package-data]
-bluerov2_gym = ["assets/*", "workflows/plotting/assets/*.csv"]
+bluerov2_gym = ["assets/*", "workflows/plotting/assets/*.csv", "workflows/plotting/training/*.html"]
 
 [project.optional-dependencies]
 control = ["casadi>=3.6"]

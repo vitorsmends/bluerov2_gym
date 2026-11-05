@@ -25,6 +25,38 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn('moderate',config['disturbance']['scenarios'])
         self.assertEqual(evaluation_plan(config)['runs'],200)
 
+    def test_evaluation_inherits_training_snapshot_and_rejects_dynamics_changes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder)
+            training=root/'train'
+            training.mkdir()
+            snapshot={'environment': {'config': {'dt': .2}, 'dynamics_config': {
+                'dt': .2, 'mechanics_model': 'corrected',
+                'disturbance_model': {'preset': 'std'}}}}
+            (training/'config.resolved.yaml').write_text(yaml.safe_dump(snapshot))
+            path=root/'evaluate.yaml'
+            path.write_text(yaml.safe_dump({'environment': {'training_run': 'train'}}))
+            _,config=resolve(path)
+            self.assertEqual(config['environment']['dynamics_config'],snapshot['environment']['dynamics_config'])
+            self.assertEqual(config['environment']['config'],snapshot['environment']['config'])
+            path.write_text(yaml.safe_dump({'environment': {'training_run': 'train',
+                'dynamics_config': {'mechanics_model': 'std'}}}))
+            with self.assertRaisesRegex(ValueError,'differ from training_run'):
+                resolve(path)
+
+    def test_runner_applies_inherited_environment_limits(self):
+        from bluerov2_gym.workflows.evaluation.runner import ExperimentRunner
+        with tempfile.TemporaryDirectory() as folder:
+            runner=ExperimentRunner({'experiment':{},'environment':{
+                'config': {'dt': .2,'action_space': {'low': -12.,'high': 12.}},
+                'dynamics_config': {'mechanics_model':'corrected'}}})
+            env=runner._make_env(Path(folder))
+            try:
+                self.assertEqual(env.unwrapped.dynamics.dt,.2)
+                self.assertEqual(float(env.action_space.high[0]),12.)
+            finally:
+                env.close()
+
     def test_default_run_root_is_centralized(self):
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder)/'artifacts'

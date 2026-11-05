@@ -13,6 +13,9 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 METRICS = (
     ("rollout/ep_rew_mean", "Mean episode reward", "Episode reward", "episode_reward", "#59A14F"),
     ("rollout/ep_len_mean", "Mean episode length", "Steps per episode", "episode_length", "#4E79A7"),
+    ("rollout/position_error_mean_m", "Mean position error per rollout", "Euclidean error (m)", "position_error_mean", "#4E79A7"),
+    ("rollout/position_error_rmse_m", "RMS position error per rollout", "Euclidean RMS error (m)", "position_error_rmse", "#E15759"),
+    ("rollout/episode_position_error_mean_m", "Mean episode position error (last 100 episodes)", "Euclidean error (m)", "episode_position_error", "#B07AA1"),
     ("train/loss", "PPO total loss", "Loss", "total_loss", "#E15759"),
     ("train/policy_gradient_loss", "Policy gradient loss", "Loss", "policy_gradient_loss", "#B07AA1"),
     ("train/value_loss", "Value loss", "Loss", "value_loss", "#F28E2B"),
@@ -123,8 +126,10 @@ def plot_training(
         fig.tight_layout()
         pdf_path = output_dir / f"ppo_{filename}_{run_dir.name}.pdf"
         fig.savefig(pdf_path, dpi=300, bbox_inches="tight")
+        png_path = output_dir / f"ppo_{filename}_{run_dir.name}.png"
+        fig.savefig(png_path, dpi=180, bbox_inches="tight")
         plt.close(fig)
-        output_paths.append(pdf_path)
+        output_paths.extend([pdf_path, png_path])
 
     if not output_paths:
         raise RuntimeError(f"No supported PPO scalar metrics found in: {run_dir}")

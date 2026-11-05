@@ -128,6 +128,7 @@ class ExperimentRunner:
         env = make_env(
             render_mode=self.config["experiment"].get("render_mode"),
             dynamics_config=self.config.get("environment", {}).get("dynamics_config"),
+            env_config=self.config.get("environment", {}).get("config"),
         )
         manifest = {
             "config": self.config,

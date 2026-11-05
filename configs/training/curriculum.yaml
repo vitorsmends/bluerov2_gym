@@ -1,3 +1,4 @@
+# Reference PPO/sea phases from 0436ce3; goal-based transitions requested explicitly.
 environment:
   id: BlueRov-v0
   entry_point: bluerov2_gym.envs:BlueRov
@@ -65,7 +66,8 @@ ppo:
       - 256
 training:
   tb_log_name: PPO_BlueROV2_Curriculum
-  seed: 42
+  seed: null
+  task: stationkeeping_curriculum
 jonswap_defaults:
   directional_spread_deg: 25.0
   water_depth: 30.0
@@ -188,3 +190,14 @@ curriculum:
     - 65.0
     max_wave_force: 40.0
     max_wave_moment: 12.0
+reference:
+  commit: 0436ce3482e95105cb2376681b2bd6cbec72d99c
+  path: training/train_curriculum.py
+  sha256: 9917707df4464b4c3517f50c3cc42b58d1ce35efb172bea8c6796649c1775909
+  functional_change: Corrected dynamics and explicitly selected goal-based transitions.
+    PPO, reward, normalization and sea stages preserved; mode timesteps restores the
+    reference transition rule.
+curriculum_transition:
+  mode: success
+  hold_seconds: 10.0
+  consecutive_episodes: 3

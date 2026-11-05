@@ -2,15 +2,14 @@ experiment:
   mode: trajectory_suite
   dt: 0.1
   steps: 1000
-  repetitions: 5
+  repetitions: 3
   thrust_limit: 40.0
   render_mode: null
 output:
   directory: artifacts/evaluation/imported/results-severe/trajectory_experiments
 environment:
-  dynamics_config:
-    disturbance_model:
-      preset: std
+  # Reuse the physical/environment snapshot recorded by this training run.
+  training_run: ../../artifacts/training/my_train
 controllers:
 - name: pid
   enabled: true
@@ -18,18 +17,18 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    model_path: ../../artifacts/models/current/ppo_trajectory_final.zip
-    vecnormalize_path: ../../artifacts/models/current/vec_normalize.pkl
+    model_path: ../../artifacts/training/my_train/models/bluerov_ppo_curriculum_seed_42.zip
+    vecnormalize_path: ../../artifacts/training/my_train/models/bluerov_vec_normalize_curriculum_seed_42.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml
     dynamics_config_path: ../dynamics/dynamics_config.yaml
 - name: smc
   enabled: true
   params: {}
-- name: nmpc
-  enabled: true
-  params:
-    horizon: 10
-    control_blocks: 5
+# - name: nmpc
+#   enabled: true
+#   params:
+#     horizon: 10
+#     control_blocks: 5
 disturbance:
   config_path: ocean.yaml
   default_scenario: severe
@@ -43,12 +42,12 @@ trajectories:
 - name: circle
   enabled: true
   params: {}
-- name: letter_b
-  enabled: true
-  params: {}
-- name: star
-  enabled: true
-  params: {}
+# - name: letter_b
+#   enabled: true
+#   params: {}
+# - name: star
+#   enabled: true
+#   params: {}
 stationkeeping:
   targets:
   - id: 1

@@ -17,7 +17,8 @@ bluerov plot --run artifacts/evaluation/SEU_RUN --plots tracking_error rmse ener
 | `trajectories` | Figuras espaciais originais | CSV por controlador/trajetória; escolhe repetição 0 |
 | `article` | tracking_error, rmse, cpu_time, energy, pareto | CSVs de trajetórias agrupados por cenário |
 | `legacy_path_tracking` | path_tracking, cost, cost_tradeoff, violin | CSV por controlador, como pid.csv |
-| `training` | Curvas TensorBoard | Logs de treino |
+| `training` | Curvas individuais e painel de progresso | Logs de treino |
+| `training_checkpoints` | Erro, reward e sucesso por checkpoint | Resultado de `evaluate-checkpoints` |
 | `optimization` | Resumo Optuna | Banco do estudo original |
 | `ftc` | Comparação nominal/FTC | Dois CSVs explicitamente indicados |
 

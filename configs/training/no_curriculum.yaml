@@ -1,0 +1,52 @@
+# Optional fixed-sea experiment preserved for future comparisons.
+# The standard trainer/config is curriculum.yaml; this recipe has its own PPO settings.
+environment:
+  id: BlueRov-v0
+  max_episode_steps: 1000
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config_file: ../dynamics/dynamics_config.yaml
+paths:
+  tensorboard_log: ../../artifacts/logs/tensorboard/
+  model_dir: ../../artifacts/models/no_curriculum/
+  model_name: bluerov_ppo
+  vecnormalize_name: bluerov_vec_normalize.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+  clip_reward: 10.0
+  gamma: 0.99
+  epsilon: 1.0e-08
+checkpoint:
+  save_freq: 100000
+  name_prefix: bluerov_ppo_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  clip_range_vf: null
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  target_kl: null
+  normalize_advantage: true
+  use_sde: false
+  sde_sample_freq: -1
+  policy_kwargs:
+    net_arch:
+    - 256
+    - 256
+training:
+  task: stationkeeping_no_curriculum
+  total_timesteps: 1000000
+  seed: null
+  tb_log_name: PPO_BlueROV2_NoCurriculum

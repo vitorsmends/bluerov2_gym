@@ -34,6 +34,18 @@ def resolve(path):
             environment[target] = merge(read_yaml(file), environment.get(target,{}))
     if isinstance(environment.get('dynamics_config'), str):
         environment['dynamics_config'] = read_yaml(absolute(environment['dynamics_config']))
+    if environment.get('training_run'):
+        run = Path(absolute(environment['training_run']))
+        trained = read_yaml(run/'config.resolved.yaml').get('environment', {})
+        if not trained.get('dynamics_config'):
+            raise ValueError(f'Training run has no resolved dynamics: {run}')
+        inherited = merge(trained, environment)
+        if inherited['dynamics_config'] != trained['dynamics_config']:
+            raise ValueError('Evaluation dynamics differ from training_run. Remove training_run only for an intentional ablation.')
+        if inherited.get('config', {}) != trained.get('config', {}):
+            raise ValueError('Evaluation environment config differs from training_run.')
+        inherited['training_run'] = str(run)
+        config['environment'] = inherited
     disturbance = config.get('disturbance', {})
     if disturbance.get('config_path'):
         external = read_yaml(absolute(disturbance.pop('config_path')))
@@ -75,6 +87,7 @@ def evaluation_plan(config):
     dyn=config.get('environment',{}).get('dynamics_config',{})
     from bluerov2_gym.envs.core.dynamics import Dynamics
     return dict(mode=mode,controllers=controllers,scenarios=scenarios,cases=cases,
+                training_run=config.get('environment',{}).get('training_run'),
                 repetitions=experiment.get('repetitions',5),seed=experiment.get('seed',42),
                 dt=experiment.get('dt',.1),integration_dt=dyn.get('dt',.1),steps=experiment.get('steps',1000),
                 scenario_seeds={name:disturbance.get('scenarios',{}).get(name,{}).get('seed',42) for name in scenarios},

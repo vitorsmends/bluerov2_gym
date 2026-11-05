@@ -26,11 +26,14 @@ if ENV_ID not in gym.envs.registry:
     )
 
 
-def make_env(render_mode=None, jonswap_params=None, dynamics_config=None):
+def make_env(render_mode=None, jonswap_params=None, dynamics_config=None, env_config=None):
+    config = dict(env_config or {})
+    if jonswap_params is not None:
+        config['jonswap'] = jonswap_params
     return gym.make(
         ENV_ID,
         render_mode=render_mode,
-        env_config={"jonswap": jonswap_params} if jonswap_params is not None else None,
+        env_config=config or None,
         dynamics_config=dynamics_config,
     )
 
@@ -75,10 +78,12 @@ def tracking_errors(state: np.ndarray, reference: np.ndarray) -> dict:
 def build_tracking_observation(obs: dict, reference: np.ndarray) -> dict:
     """Build the virtual observation used by the PPO trajectory policy.
 
-    This reproduces the same observation transformation used during path-tracking
-    PPO training: x, y and z become position errors in the vehicle yaw frame;
-    u is replaced by the inertial surge-velocity tracking error; the other
-    state channels are kept as in the original observation.
+    Legacy adapter: position channels become errors in the vehicle yaw frame,
+    only u receives a velocity-reference subtraction, and other channels stay
+    unchanged. The current stationkeeping curriculum does not train this
+    transformation. Model filenames alone do not establish their training task.
+    In particular, u and reference[6] use different frames. Preserve this
+    historical behavior for reproducibility.
     """
     virtual_obs = {k: np.asarray(v, dtype=np.float32).copy() for k, v in obs.items()}
 
