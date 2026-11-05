@@ -1,0 +1,7 @@
+# Core versions currently used by .venv-ppo-reference and the PPO validations.
+# Applied as constraints alongside the dependencies declared in pyproject.toml.
+numpy==2.2.6
+scipy==1.15.3
+gymnasium==1.2.3
+stable-baselines3==2.8.0
+torch==2.11.0

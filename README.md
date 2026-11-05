@@ -3,25 +3,56 @@
 Ambiente de reinforcement learning do BlueROV2 com dinâmica de seis graus de
 liberdade, distúrbios JONSWAP e avaliação de PID, SMC, NMPC e PPO.
 
-## Instalação
+## Setup antes do treinamento
 
-Na raiz do repositório, em um ambiente Python 3.10 ou superior compatível com
-PyTorch e suas dependências:
-
-Para o ambiente `.venv-ppo-reference` deste workspace, use `uv`, que não exige
-`pip` instalado dentro do ambiente:
+Na raiz do repositório, execute no macOS ou Linux:
 
 ```bash
-uv pip install --python .venv-ppo-reference/bin/python -e .
+bash scripts/setup.sh
+source .venv-ppo-reference/bin/activate
 ```
 
-Para incluir NMPC e otimização de hiperparâmetros:
+O script instala o `uv` se necessário, cria o ambiente com Python 3.10 quando
+ele não existe, instala o pacote em modo editável e verifica as dependências.
+Inclui treinamento, plots, PID/SMC, NMPC e otimização. Não precisa de `pip`
+instalado dentro do ambiente. Se o ambiente já existe, ele é reutilizado.
+A ativação com `source` deve ser feita no seu terminal, pois um script executado
+com `bash` não consegue ativar o ambiente no processo do terminal que o chamou.
+
+As versões centrais do PPO seguem `configs/setup/ppo_reference_constraints.txt`,
+conferidas no ambiente usado nos testes: NumPy 2.2.6, SciPy 1.15.3, Gymnasium 1.2.3,
+Stable-Baselines3 2.8.0 e PyTorch 2.11.0. O setup usa essas restrições com
+`pyproject.toml`; não aplica as versões antigas do `uv.lock`.
+O instalador de `uv` segue a [documentação oficial da Astral](https://docs.astral.sh/uv/getting-started/installation/).
+
+Para instalar apenas as dependências de treinamento, plots e PID/SMC:
 
 ```bash
-uv pip install --python .venv-ppo-reference/bin/python -e '.[control,optimize]'
+bash scripts/setup.sh --minimal
 ```
 
-Em outro ambiente que já tenha `pip`, `python -m pip install -e .` também é válido.
+Para conferir o que seria instalado, sem instalar pacotes:
+
+```bash
+bash scripts/setup.sh --dry-run
+```
+
+Para criar outro ambiente (o caminho relativo é resolvido a partir da raiz do projeto):
+
+```bash
+BLUEROV_VENV=.venv-comparacao bash scripts/setup.sh
+source .venv-comparacao/bin/activate
+```
+
+Depois do setup, execute o treinamento padrão com currículo e física nova:
+
+```bash
+bluerov train --config configs/training/curriculum.yaml \
+  --output artifacts/training/com_curriculo
+```
+
+Use uma pasta de saída nova para cada execução. Em novos terminais, basta repetir
+`source .venv-ppo-reference/bin/activate`; não é preciso reinstalar tudo.
 
 O comando principal é `bluerov`. A alternativa equivalente, sem depender do
 executável no PATH, é `python -m bluerov2_gym.workflows`.
@@ -31,8 +62,8 @@ executável no PATH, é `python -m bluerov2_gym.workflows`.
 Execute os comandos abaixo na raiz do repositório, com o ambiente Python ativado.
 Por exemplo, `source .venv/bin/activate` ou, neste workspace,
 `source .venv-ppo-reference/bin/activate`. Se o comando `bluerov` ainda não
-estiver disponível, instale com `uv pip install --python .venv-ppo-reference/bin/python -e .`.
-A mensagem `No module named pip` não impede esse comando de funcionar.
+estiver disponível, execute `bash scripts/setup.sh` e ative o ambiente novamente.
+O setup funciona mesmo quando o ambiente não possui `pip`.
 
 ## Treinamento validado: station keeping por currículo
 
