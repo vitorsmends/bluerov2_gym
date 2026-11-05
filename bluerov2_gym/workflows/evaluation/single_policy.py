@@ -29,7 +29,7 @@ def main(argv=None, make_plots=True):
     parser.add_argument('--offset', type=float, nargs=3, default=[.2,-.15,.08])
     parser.add_argument('--duration', type=float, default=100.)
     parser.add_argument('--seed', type=int, default=42)
-    parser.add_argument('--observation-adapter', choices=['goal_frame', 'legacy'], default='goal_frame')
+    parser.add_argument('--observation-adapter', choices=['legacy', 'goal_frame'], default='legacy')
     parser.add_argument('--output', default=str(artifact_path('evaluation','single_policy')))
     args = parser.parse_args(argv)
     config = load_yaml(args.dynamics)

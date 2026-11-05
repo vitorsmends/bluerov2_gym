@@ -75,7 +75,7 @@ def tracking_errors(state: np.ndarray, reference: np.ndarray) -> dict:
     }
 
 
-OBSERVATION_ADAPTERS = ('goal_frame', 'legacy')
+OBSERVATION_ADAPTERS = ('legacy', 'goal_frame')
 
 
 def body_to_world_rotation(roll, pitch, yaw):
@@ -90,10 +90,10 @@ def body_to_world_rotation(roll, pitch, yaw):
     ], dtype=float)
 
 
-def build_tracking_observation(obs: dict, reference: np.ndarray, adapter='goal_frame') -> dict:
-    """Map a level reference into the origin/zero-yaw convention used in training.
+def build_tracking_observation(obs: dict, reference: np.ndarray, adapter='legacy') -> dict:
+    """Use the 0436ce3 adapter by default; goal_frame is experimental.
 
-    Observation: position in a virtual world anchored at the target yaw;
+    Experimental goal_frame: position in a virtual world anchored at target yaw;
     roll/pitch unchanged, relative yaw, linear velocity error in actual BODY.
     ref[6:9] is WORLD linear velocity. ref[9:12] is current-BODY angular velocity
     (currently zero in all built-in reference generators).

@@ -17,7 +17,7 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    observation_adapter: goal_frame
+    observation_adapter: legacy
     model_path: ../../artifacts/training/com_curriculo/models/bluerov_ppo_curriculum.zip
     vecnormalize_path: ../../artifacts/training/com_curriculo/models/bluerov_vec_normalize_curriculum.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml

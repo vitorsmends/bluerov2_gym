@@ -17,7 +17,7 @@ controllers:
 - name: ppo
   enabled: true
   params:
-    observation_adapter: goal_frame
+    observation_adapter: legacy
     model_path: ../../artifacts/training/stationkeeping_restored/models/bluerov_ppo.zip
     vecnormalize_path: ../../artifacts/training/stationkeeping_restored/models/bluerov_vec_normalize.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml

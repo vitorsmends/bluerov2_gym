@@ -80,7 +80,7 @@ def evaluation_plan(config):
         from bluerov2_gym.envs.core.dynamics import Dynamics
         dyn=read_yaml(config['dynamics']) if config.get('dynamics') else {}
         return dict(mode=mode,model=config.get('model'),normalizer=config.get('normalizer'),
-                    observation_adapter=config.get('observation_adapter','goal_frame'),
+                    observation_adapter=config.get('observation_adapter','legacy'),
                     target=config.get('target',[0,0,-2]),offset=config.get('offset',[.2,-.15,.08]),
                     duration_s=config.get('duration',100),seed=config.get('seed',42),runs=1,
                     mechanics_model='corrected',dynamics=config.get('dynamics'),dt=dyn.get('dt',.1),

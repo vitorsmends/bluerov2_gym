@@ -1,6 +1,6 @@
 experiment:
   mode: stationkeeping_single
-observation_adapter: goal_frame
+observation_adapter: legacy
 model: ../../artifacts/models/current/bluerov_ppo.zip
 normalizer: ../../artifacts/models/current/bluerov_vec_normalize.pkl
 dynamics: ../dynamics/dynamics_config.yaml

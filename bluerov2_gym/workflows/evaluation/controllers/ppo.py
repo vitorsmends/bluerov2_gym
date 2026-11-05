@@ -26,7 +26,7 @@ class PPOController(BaseController):
         vecnormalize_path: str = "vec_normalize.pkl",
         env_config_path: str = "configs/dynamics/blue_rov_config.yaml",
         dynamics_config_path: str = "configs/dynamics/dynamics_config.yaml",
-        observation_adapter: str = 'goal_frame',
+        observation_adapter: str = 'legacy',
     ):
         if observation_adapter not in OBSERVATION_ADAPTERS:
             raise ValueError(f'observation_adapter must be one of {OBSERVATION_ADAPTERS}.')
