@@ -278,4 +278,3 @@ Para escolher explicitamente o backend no setup, use por exemplo
 `bash scripts/setup.sh --torch-backend=cpu --reinstall-torch`; backends CUDA
 específicos também podem ser passados nesse argumento, desde que tenham um wheel
 compatível com a versão de PyTorch fixada e com o driver.
-
