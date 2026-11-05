@@ -14,7 +14,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from .base import BaseController
-from ..env_utils import ENV_ID, build_tracking_observation
+from ..env_utils import ENV_ID, OBSERVATION_ADAPTERS, build_tracking_observation
 
 
 class PPOController(BaseController):
@@ -26,7 +26,11 @@ class PPOController(BaseController):
         vecnormalize_path: str = "vec_normalize.pkl",
         env_config_path: str = "configs/dynamics/blue_rov_config.yaml",
         dynamics_config_path: str = "configs/dynamics/dynamics_config.yaml",
+        observation_adapter: str = 'goal_frame',
     ):
+        if observation_adapter not in OBSERVATION_ADAPTERS:
+            raise ValueError(f'observation_adapter must be one of {OBSERVATION_ADAPTERS}.')
+        self.observation_adapter = observation_adapter
         self.model_path = self._resolve_file(model_path)
         self.vecnormalize_path = self._resolve_file(vecnormalize_path)
 
@@ -49,6 +53,7 @@ class PPOController(BaseController):
         self.vec_env.norm_reward = False
 
         self.model = PPO.load(str(self.model_path))
+        print(f'PPO observation adapter: {self.observation_adapter}', flush=True)
 
         self.last_metrics = self._empty_metrics()
 
@@ -97,7 +102,7 @@ class PPOController(BaseController):
 
         prepare_start = time.perf_counter()
 
-        virtual_obs = build_tracking_observation(obs, reference)
+        virtual_obs = build_tracking_observation(obs, reference, self.observation_adapter)
         norm_obs = self.vec_env.normalize_obs(virtual_obs)
 
         prepare_time = time.perf_counter() - prepare_start

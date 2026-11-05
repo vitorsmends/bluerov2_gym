@@ -18,6 +18,7 @@ controllers:
 - name: ppo
   enabled: true
   params:
+    observation_adapter: legacy
     model_path: ../../artifacts/models/current/ppo_trajectory_final.zip
     vecnormalize_path: ../../artifacts/models/current/vec_normalize.pkl
     env_config_path: ../dynamics/blue_rov_config.yaml

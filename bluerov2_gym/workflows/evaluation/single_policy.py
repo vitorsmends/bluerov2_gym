@@ -29,6 +29,7 @@ def main(argv=None, make_plots=True):
     parser.add_argument('--offset', type=float, nargs=3, default=[.2,-.15,.08])
     parser.add_argument('--duration', type=float, default=100.)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--observation-adapter', choices=['goal_frame', 'legacy'], default='goal_frame')
     parser.add_argument('--output', default=str(artifact_path('evaluation','single_policy')))
     args = parser.parse_args(argv)
     config = load_yaml(args.dynamics)
@@ -47,7 +48,8 @@ def main(argv=None, make_plots=True):
     terminated = truncated = False
     try:
         controller = PPOController(model_path=args.model, vecnormalize_path=args.normalizer,
-                                   dynamics_config_path=args.dynamics)
+                                   dynamics_config_path=args.dynamics,
+                                   observation_adapter=args.observation_adapter)
         obs, _ = env.reset(seed=args.seed)
         for key, value in zip(['x','y','z'], target+np.array(args.offset)):
             env.unwrapped.state[key] = float(value)
@@ -88,6 +90,7 @@ def main(argv=None, make_plots=True):
         manifest = dict(artifacts=hashes,target_m=target.tolist(),yaw_target_deg=0.,
                         initial_offset_m=args.offset,initial_yaw_deg=10.,seed=args.seed,
                         deterministic=True,normalization_training=False,
+                        observation_adapter=args.observation_adapter,
                         dynamics_config=config,
                         resolved_disturbance_model=env.unwrapped.dynamics.disturbance_model,
                         summary=summary)

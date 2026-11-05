@@ -75,16 +75,62 @@ def tracking_errors(state: np.ndarray, reference: np.ndarray) -> dict:
     }
 
 
-def build_tracking_observation(obs: dict, reference: np.ndarray) -> dict:
-    """Build the virtual observation used by the PPO trajectory policy.
+OBSERVATION_ADAPTERS = ('goal_frame', 'legacy')
 
-    Legacy adapter: position channels become errors in the vehicle yaw frame,
-    only u receives a velocity-reference subtraction, and other channels stay
-    unchanged. The current stationkeeping curriculum does not train this
-    transformation. Model filenames alone do not establish their training task.
-    In particular, u and reference[6] use different frames. Preserve this
-    historical behavior for reproducibility.
+
+def body_to_world_rotation(roll, pitch, yaw):
+    """R_WB, with the same Euler convention as Dynamics kinematics."""
+    cp, sp = np.cos(roll), np.sin(roll)
+    ct, st = np.cos(pitch), np.sin(pitch)
+    cy, sy = np.cos(yaw), np.sin(yaw)
+    return np.array([
+        [cy*ct, cy*st*sp-sy*cp, cy*st*cp+sy*sp],
+        [sy*ct, sy*st*sp+cy*cp, sy*st*cp-cy*sp],
+        [-st, ct*sp, ct*cp],
+    ], dtype=float)
+
+
+def build_tracking_observation(obs: dict, reference: np.ndarray, adapter='goal_frame') -> dict:
+    """Map a level reference into the origin/zero-yaw convention used in training.
+
+    Observation: position in a virtual world anchored at the target yaw;
+    roll/pitch unchanged, relative yaw, linear velocity error in actual BODY.
+    ref[6:9] is WORLD linear velocity. ref[9:12] is current-BODY angular velocity
+    (currently zero in all built-in reference generators).
+
+    For a stationary zero pose/reference, the input convention is the training
+    convention. A moving reference additionally introduces acceleration and
+    rotating-frame effects; this adapter is not a proof of dynamics equivalence.
     """
+    if adapter == 'legacy':
+        return build_legacy_tracking_observation(obs, reference)
+    if adapter != 'goal_frame':
+        raise ValueError(f'Unknown observation adapter {adapter!r}; use {OBSERVATION_ADAPTERS}.')
+    ref = np.asarray(reference, dtype=float).reshape(12)
+    if not np.all(np.isfinite(ref)):
+        raise ValueError('PPO reference must contain finite values.')
+    if not np.allclose(ref[3:5], 0., rtol=0., atol=1e-12):
+        raise ValueError('goal_frame supports level targets (reference roll/pitch must be zero).')
+    virtual = {k: np.asarray(v, dtype=np.float32).copy() for k, v in obs.items()}
+    state = obs_to_state(obs).astype(float)
+    goal_rotation = body_to_world_rotation(0., 0., ref[5])
+    position = goal_rotation.T @ (state[:3] - ref[:3])
+    actual_rotation = body_to_world_rotation(*state[3:6])
+    velocity = state[6:9] - actual_rotation.T @ ref[6:9]
+    angular_velocity = state[9:12] - ref[9:12]
+    for keys, values in [(('x', 'y', 'z'), position), (('u', 'v', 'w'), velocity),
+                         (('p', 'q', 'r'), angular_velocity)]:
+        for key, value in zip(keys, values):
+            virtual[key] = np.array([value], dtype=np.float32)
+    # Preserve the original zero-reference yaw exactly (including float32's
+    # representation of the branch boundary); only wrap a nonzero target.
+    if ref[5] != 0.:
+        virtual['yaw'] = np.array([wrap_angle(state[5] - ref[5])], dtype=np.float32)
+    return virtual
+
+
+def build_legacy_tracking_observation(obs: dict, reference: np.ndarray) -> dict:
+    """Historical BODY position/u-only adapter, kept for explicit reproduction."""
     virtual_obs = {k: np.asarray(v, dtype=np.float32).copy() for k, v in obs.items()}
 
     state = obs_to_state(obs)

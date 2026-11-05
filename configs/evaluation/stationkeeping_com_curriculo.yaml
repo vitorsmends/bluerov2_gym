@@ -1,0 +1,70 @@
+# Final curriculum policy and paired normalizer from com_curriculo.
+experiment:
+  mode: stationkeeping
+  dt: 0.1
+  steps: 1000
+  repetitions: 3
+  thrust_limit: 40.0
+  render_mode: null
+output:
+  directory: artifacts/evaluation/imported/results-severe/trajectory_experiments
+environment:
+  training_run: ../../artifacts/training/com_curriculo
+controllers:
+- name: pid
+  enabled: true
+  params: {}
+- name: ppo
+  enabled: true
+  params:
+    observation_adapter: goal_frame
+    model_path: ../../artifacts/training/com_curriculo/models/bluerov_ppo_curriculum.zip
+    vecnormalize_path: ../../artifacts/training/com_curriculo/models/bluerov_vec_normalize_curriculum.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+- name: smc
+  enabled: true
+  params: {}
+disturbance:
+  default_scenario: severe
+  scenarios:
+    severe:
+      Hs: 4.5
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - -0.707
+      - 0.707
+      directional_spread_deg: 35.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.8
+      max_current: 0.8
+      alpha_wave: 0.02
+      noise_std: 0.02
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 45.0
+      - 45.0
+      - 60.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 30.0
+      max_wave_moment: 10.0
+      seed: 42
+stationkeeping:
+  targets:
+  - id: 1
+    name: depth_hold
+    pos:
+    - 0.0
+    - 0.0
+    - -0.8
+    yaw_deg: 0.0

@@ -124,3 +124,15 @@ Use pastas de saída novas a cada execução. Edite os YAMLs para outros alvos,
 trajetórias ou cenários; mudar o mar é um teste de robustez além do cenário de treino.
 O runner de station keeping percorre todos os cenários presentes em `scenarios`.
 Essa campanha avalia o agente existente sem retreiná-lo.
+
+## Convenção das observações do PPO
+
+O controlador PPO agora usa `params.observation_adapter: goal_frame` por padrão.
+O adaptador transforma o estado para um mundo virtual ancorado na posição/yaw
+do alvo e desconta as três velocidades de referência no BODY correto antes da
+normalização. `legacy` reproduz a transformação antiga. As configurações com
+snapshot de treinamento selecionam `goal_frame` explicitamente; as campanhas
+antigas sem snapshot mantêm `legacy` para rastreabilidade.
+Veja a [derivação matemática e as limitações para trajetórias móveis](ppo_observation_convention.md).
+Essa mudança corrige a convenção de entrada, sem alterar treinamento, recompensa,
+física ou normalizador e sem garantir, por si só, desempenho equivalente no tracking.

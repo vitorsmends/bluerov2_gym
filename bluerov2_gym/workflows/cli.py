@@ -45,6 +45,7 @@ def evaluate(args):
                 argv=['--model',config['model'],'--normalizer',config['normalizer'],
                       '--dynamics',config['dynamics'],'--output',str(run/'data'),
                       '--duration',str(config.get('duration',100)),'--seed',str(config.get('seed',42)),
+                      '--observation-adapter',config.get('observation_adapter','goal_frame'),
                       '--target',*map(str,config.get('target',[0,0,-2])),
                       '--offset',*map(str,config.get('offset',[.2,-.15,.08]))]
                 single(argv,make_plots=False)

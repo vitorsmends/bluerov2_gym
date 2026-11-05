@@ -506,3 +506,12 @@ Use `--port 8766` caso a porta esteja ocupada, `--interval 2` para atualizar a c
 e `--no-open` para não abrir uma aba automaticamente. Encerre o servidor com Ctrl+C
 nesse terminal; o treinamento continua no outro. O diretório em `--run` precisa ser
 o mesmo passado como `--output` ao treinamento.
+
+## Convenção de entrada do PPO na avaliação
+
+Nas avaliações dos treinos atuais, `params.observation_adapter: goal_frame`
+converte posição/orientação para um mundo virtual ancorado no alvo e mantém
+as velocidades relativas no referencial BODY. O modo `legacy` permanece
+selecionável para reproduzir resultados antigos. A explicação matemática e
+os limites dessa adaptação para trajetórias móveis estão em
+[Convenção das observações do PPO](docs/ppo_observation_convention.md).
