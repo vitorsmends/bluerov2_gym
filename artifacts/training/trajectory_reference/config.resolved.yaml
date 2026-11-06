@@ -1,0 +1,163 @@
+reference:
+  commit: 889a766e4615098659a2f923782a1a56f921edd3
+  path: experiments_traj/train_ppo.py
+  sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
+  scope: Training/reset/feedback/reward/control recipe only. Current dynamics and
+    disturbance remain unchanged.
+environment:
+  id: BlueRov-v0
+  entry_point: bluerov2_gym.workflows.training.trajectory_env:TrajectoryTrackingEnv
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config:
+    dt: 0.1
+    rho: 1000.0
+    g: 9.81
+    mechanics_model: corrected
+    disturbance_model:
+      preset: std
+    vehicle:
+      base_mass: 14.8
+      prop_mass: 0.07
+      n_thrusters: 6
+      dimensions:
+        x: 0.4
+        y: 0.25
+        z: 0.1
+      inertia:
+        Ixx: 5.2539
+        Ixy: 0.0144
+        Ixz: 0.3341
+        Iyy: 7.942
+        Iyz: 0.026
+        Izz: 6.9123
+    buoyancy:
+      correction_factor: 1.01
+    hydrodynamics:
+      added_mass:
+      - 5.5
+      - 12.7
+      - 14.57
+      - 0.12
+      - 0.12
+      - 0.12
+      linear_damping:
+      - 25.15
+      - 7.364
+      - 17.955
+      - 10.888
+      - 20.761
+      - 3.744
+      quadratic_damping:
+      - 17.77
+      - 125.9
+      - 72.36
+      - 0.1246
+      - 0.1246
+      - 0.1857
+    thrusters:
+      min: -40.0
+      max: 40.0
+      allocation_matrix:
+      - - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.70710678
+        - -0.70710678
+        - -0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - -1.0
+      - - 0.05126524
+        - -0.05126524
+        - -0.05126524
+        - 0.05126524
+        - -0.1105
+        - -0.1105
+      - - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.0025
+        - 0.0025
+      - - 0.16652365
+        - -0.16652365
+        - 0.17500893
+        - -0.17500893
+        - 0.0
+        - 0.0
+    jonswap:
+      Hs: 2.0
+      Tp: 12.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.5
+      - 0.5
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.7
+      alpha_wave: 0.02
+      noise_std: 0.01
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+paths:
+  tensorboard_log: /home/mendes/Github/bluerov2_gym/artifacts/training/trajectory_reference/logs/tensorboard
+  model_dir: /home/mendes/Github/bluerov2_gym/artifacts/training/trajectory_reference/models
+  model_name: ppo_trajectory_final
+  vecnormalize_name: vec_normalize.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_trajectory_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs: {}
+training:
+  task: trajectory_tracking
+  device: auto
+  total_timesteps: 1000000
+  seed: null
+  tb_log_name: PPO_BlueROV2_Trajectory
