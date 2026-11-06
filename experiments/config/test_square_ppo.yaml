@@ -1,0 +1,29 @@
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 800
+  repetitions: 1
+  seed: 42
+  thrust_limit: 40.0
+  render_mode: null
+
+output:
+  directory_template: results-{scenario}/trajectory_experiments/ppo_square_seed42
+
+controllers:
+  - name: ppo
+    enabled: true
+    params:
+      model_path: bluerov_ppo_curriculum_seed_42
+      vecnormalize_path: bluerov_vec_normalize_curriculum_seed_42.pkl
+      env_config_path: config/blue_rov_config.yaml
+      dynamics_config_path: config/dynamics_config.yaml
+
+disturbance:
+  config_path: ../ocean_environment.yaml
+  scenario_names:
+    - severe
+
+trajectories:
+  - name: square
+    enabled: true
