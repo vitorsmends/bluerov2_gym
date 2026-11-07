@@ -3,8 +3,10 @@ from pathlib import Path
 import pandas as pd
 
 
-def iter_csv_runs(folder: Path, prefix: str, required_columns: set[str]):
+def iter_csv_runs(folder: Path, prefix: str, required_columns: set[str], trajectories=None):
     for path in sorted(folder.glob(f"{prefix}*.csv")):
+        if trajectories is not None and path.stem[len(prefix):] not in trajectories:
+            continue
         df = pd.read_csv(path)
         missing = required_columns - set(df.columns)
         if missing:

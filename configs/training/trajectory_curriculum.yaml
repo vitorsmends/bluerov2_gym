@@ -1,0 +1,188 @@
+# Default: two std preparations, then four corrected-mechanics wave stages.
+# 3M steps/phase is a planning reference, not a stop or promotion threshold.
+# Preparation: one group, 10 s settling and two successful batches.
+# Target waves: original four Hs groups and three batches retained.
+reference:
+  commit: 889a766e4615098659a2f923782a1a56f921edd3
+  path: experiments_traj/train_ppo.py
+  sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
+  scope: PPO/reset/feedback/reward 889a766; std pretraining then corrected mechanics
+    and Hs-normalized waves.
+  implementation: Unmodified historical source plus current simulator constructor
+    and logging-only info aliases.
+environment:
+  id: BlueRov-v0
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config_file: ../dynamics/dynamics_config.yaml
+  dynamics_config:
+    disturbance_model:
+      preset: std
+      normalize_spectrum: true
+paths:
+  tensorboard_log: ../../artifacts/logs/tensorboard/
+  model_dir: ../../artifacts/models/trajectory_curriculum/
+  model_name: ppo_trajectory_curriculum
+  vecnormalize_name: vec_normalize_trajectory_curriculum.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_physics_curriculum_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs: {}
+training:
+  task: trajectory_curriculum
+  device: auto
+  seed: 42
+  phase_planned_timesteps: 3000000
+  tb_log_name: PPO_PhysicsWaveCurriculum
+evaluation:
+  every_timesteps: 20000
+  duration_seconds: 100.0
+  settling_time_seconds: 10.0
+  episodes: 20
+  groups: 4
+  seed: 100042
+curriculum_transition:
+  mode: success
+  position_tolerance_m: 0.2
+  min_tracking_fraction: 0.9
+  max_rmse_m: 0.2
+  min_batch_success_rate: 0.9
+  min_group_success_rate: 0.9
+  consecutive_batches: 3
+rehearsal:
+  probability: 0.3
+plateau_early_stopping:
+  enabled: false
+  patience_evaluations: 20
+  warmup_evaluations: 5
+  min_delta_m: 0.01
+curriculum:
+- name: A - std sem ondas
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: false
+  jonswap:
+    Hs: 0.0
+    scale: 0.0
+    max_current: 0.0
+    noise_std: 0.0
+    enable_wave_force: false
+    alpha_js: 0.0
+  evaluation:
+    every_timesteps: 10000
+    settling_time_seconds: 10.0
+    groups: 1
+  transition:
+    consecutive_batches: 2
+- name: B - std train_stable_traj
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: false
+  jonswap: {}
+  evaluation:
+    every_timesteps: 10000
+    settling_time_seconds: 10.0
+    groups: 1
+  transition:
+    consecutive_batches: 2
+- name: C1 - fisica atual, mar baixo
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 0.2
+    - 0.5
+    Tp:
+    - 10.0
+    - 12.0
+    wave_direction_deg:
+    - 30.0
+    - 60.0
+    directional_spread_deg:
+    - 15.0
+    - 25.0
+- name: C2 - fisica atual, mar intermediario
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 0.5
+    - 1.25
+    Tp:
+    - 9.0
+    - 12.0
+    wave_direction_deg:
+    - 0.0
+    - 90.0
+    directional_spread_deg:
+    - 15.0
+    - 30.0
+- name: C3 - fisica atual, mar elevado
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 1.25
+    - 2.5
+    Tp:
+    - 8.0
+    - 12.0
+    wave_direction_deg:
+    - 0.0
+    - 180.0
+    directional_spread_deg:
+    - 20.0
+    - 35.0
+- name: C4 - fisica atual, mar alvo
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 2.5
+    - 4.5
+    Tp:
+    - 8.0
+    - 12.0
+    wave_direction_deg:
+    - 0.0
+    - 360.0
+    directional_spread_deg:
+    - 20.0
+    - 35.0
+    gamma:
+    - 3.3
+    - 5.0

@@ -1,0 +1,48 @@
+# Final policy: corrected mechanics + normalized waves, inherited from the training run.
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 3
+  seed: 42
+  thrust_limit: 40.0
+  render_mode: null
+environment:
+  training_run: ../../artifacts/training/physics_wave_curriculum
+controllers:
+- name: pid
+  enabled: true
+  params: {}
+- name: ppo
+  enabled: true
+  params:
+    observation_adapter: legacy
+    model_path: ../../artifacts/training/physics_wave_curriculum/models/ppo_trajectory_curriculum.zip
+    vecnormalize_path: ../../artifacts/training/physics_wave_curriculum/models/vec_normalize_trajectory_curriculum.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+- name: smc
+  enabled: true
+  params: {}
+disturbance:
+  default_scenario: target
+  scenarios:
+    target:
+      Hs: 3.5
+      Tp: 10.0
+      gamma: 3.3
+      wave_dir:
+      - 0.70710678
+      - 0.70710678
+      directional_spread_deg: 25.0
+      seed: 42
+trajectories:
+- name: reference_889_figure_eight
+  enabled: true
+  params: {}
+- name: square
+  enabled: true
+  params: {}
+- name: circle
+  enabled: true
+  params: {}

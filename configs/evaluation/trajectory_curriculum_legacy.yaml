@@ -1,0 +1,178 @@
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 3
+  seed: 42
+  thrust_limit: 40.0
+  render_mode: null
+environment:
+  training_run: ../../artifacts/training/trajectory_curriculum_legacy
+controllers:
+- name: pid
+  enabled: true
+  params: {}
+- name: ppo
+  enabled: true
+  params:
+    observation_adapter: legacy
+    model_path: ../../artifacts/training/trajectory_curriculum_legacy/models/ppo_trajectory_curriculum.zip
+    vecnormalize_path: ../../artifacts/training/trajectory_curriculum_legacy/models/vec_normalize_trajectory_curriculum.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+- name: smc
+  enabled: true
+  params: {}
+disturbance:
+  default_scenario: calm
+  scenarios:
+    no_waves:
+      Hs: 0.0
+      Tp: 8.0
+      gamma: 1.0
+      N: 32
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.0
+      max_current: 0.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: false
+      wave_force_gain: &id001
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point: &id002
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+    calm:
+      Hs: 1.25
+      Tp: 7.03
+      gamma: 1.5
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 15.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.25
+      max_current: 0.14
+      alpha_wave: 0.02
+      noise_std: 0.005
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: *id001
+      wave_force_application_point: *id002
+      max_wave_force: 15.0
+      max_wave_moment: 5.0
+      seed: 42
+    moderate:
+      Hs: 2.5
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.707
+      - 0.707
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.5
+      alpha_wave: 0.02
+      noise_std: 0.01
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: *id001
+      wave_force_application_point: *id002
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+    severe:
+      Hs: 4.5
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.0
+      - 1.0
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.8
+      max_current: 0.8
+      alpha_wave: 0.02
+      noise_std: 0.02
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: *id001
+      wave_force_application_point: *id002
+      max_wave_force: 35.0
+      max_wave_moment: 10.0
+      seed: 42
+    extreme:
+      Hs: 4.5
+      Tp: 8.0
+      gamma: 5.0
+      N: 128
+      wave_dir:
+      - -1.0
+      - 0.0
+      directional_spread_deg: 35.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 1.2
+      max_current: 1.5
+      alpha_wave: 0.02
+      noise_std: 0.03
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 45.0
+      - 45.0
+      - 65.0
+      wave_force_application_point: *id002
+      max_wave_force: 40.0
+      max_wave_moment: 12.0
+      seed: 42
+trajectories:
+- name: reference_889_figure_eight
+  enabled: true
+  params: {}
+- name: circle
+  enabled: true
+  params: {}
+- name: square
+  enabled: true
+  params: {}
+- name: figure_eight_depth
+  enabled: true
+  params: {}
+- name: star
+  enabled: true
+  params: {}

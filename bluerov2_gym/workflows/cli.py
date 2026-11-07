@@ -70,7 +70,11 @@ def train(args):
         config.setdefault('training', {})['device'] = args.device
     if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
     task=config.get('training',{}).get('task','stationkeeping_curriculum')
-    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum','trajectory_tracking'}:
+    if args.resume_run is not None:
+        if task != 'trajectory_curriculum' or args.seeds:
+            raise ValueError('--resume-run supports one physics/wave curriculum run, without --seeds.')
+        config['training']['resume_run'] = str(args.resume_run.expanduser().resolve())
+    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum','trajectory_tracking','trajectory_curriculum','trajectory_curriculum_legacy'}:
         raise ValueError(f'Unknown training task: {task}')
     if task!='stationkeeping_curriculum' and args.ablation:
         raise ValueError('Curriculum ablations require stationkeeping_curriculum.')
@@ -85,7 +89,13 @@ def train(args):
         write_yaml(run/'config.resolved.yaml',config)
         try:
             with log_to(run/'logs/training.log'):
-                if task=='trajectory_tracking':
+                if task=='trajectory_curriculum_legacy':
+                    from .training.trajectory_curriculum_legacy import train_trajectory_curriculum
+                    train_trajectory_curriculum(config)
+                elif task=='trajectory_curriculum':
+                    from .training.trajectory_curriculum import train_trajectory_curriculum
+                    train_trajectory_curriculum(config)
+                elif task=='trajectory_tracking':
                     from .training.trajectory import train_trajectory
                     train_trajectory(config)
                 elif task=='stationkeeping_no_curriculum':
@@ -103,6 +113,9 @@ def train(args):
         except CurriculumEarlyStopped as error:
             update_manifest(run,status='early_stopped',reason=str(error),training_seed=seed)
             print(f'Early stopping: {error}')
+        except KeyboardInterrupt:
+            update_manifest(run,status='interrupted',training_seed=seed)
+            raise
         except BaseException as error:
             update_manifest(run,status='failed',error=str(error));raise
         print(f'Run: {run}')
@@ -139,6 +152,7 @@ def main(argv=None):
             p.add_argument('--seeds',type=int,nargs='+')
             p.add_argument('--ablation')
             p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=None)
+            p.add_argument('--resume-run', type=Path, help='Continue a stopped physics/wave curriculum in a new output directory.')
     for name in ['plot','plot-training']:
         p=commands.add_parser(name)
         p.add_argument('--run',type=Path)

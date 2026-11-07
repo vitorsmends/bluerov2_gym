@@ -16,7 +16,26 @@ def training_phase(config, step, runtime=None):
         lesson = lessons[index - 1]
         sea = merge(sea, merge(config.get('jonswap_defaults', {}), lesson.get('jonswap', {})))
         label = f'Fase {index}/{len(lessons)}: {lesson["name"]}'
-        if runtime.get('mode') == 'success':
+        if runtime.get('mode') == 'physics_wave_success':
+            label += (f' — validações aprovadas: {runtime.get("successful_batches", 0)}/'
+                      f'{runtime.get("required_batches", 3)}')
+            context = runtime.get('effective_context') or {}
+            sea = merge(sea, context.get('jonswap', {}))
+            label += f' — mecânica: {runtime.get("mechanics_model", "?")}'
+            if context and context.get('stage_index', index-1) != index-1:
+                label += f' — revisão: {context["name"]}'
+            if runtime.get('status') in {'interrupted', 'early_stopped', 'failed', 'completed'}:
+                label += f' — {runtime["status"]}'
+        elif runtime.get('mode') == 'trajectory_success':
+            required = runtime.get('required_episodes', 3)
+            counts = runtime.get('trajectory_successes', {})
+            covered = sum(value >= required for value in counts.values())
+            label += f' — trajetórias aprovadas: {covered}/{len(counts)}'
+            if runtime.get('current_trajectory'):
+                label += f' — atual: {runtime["current_trajectory"]}'
+            if runtime.get('status') == 'interrupted':
+                label += ' — interrompido'
+        elif runtime.get('mode') == 'success':
             label += (f' — objetivo: {runtime.get("successful_episodes", 0)}/'
                       f'{runtime.get("required_episodes", 3)} episódios consecutivos')
             if runtime.get('status') == 'budget_exhausted':

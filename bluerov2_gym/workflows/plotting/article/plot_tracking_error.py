@@ -12,10 +12,13 @@ from .run_data import iter_csv_runs
 
 
 
+TRAJECTORIES = None
+
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
     from . import config as defaults
     settings = settings or {}
+    TRAJECTORIES = settings.get("trajectory_names")
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -35,7 +38,7 @@ def load_controller_runs(folder, prefix):
     runs = []
 
     for path, repetition_id, df in iter_csv_runs(
-        folder, prefix, {"time", "tracking_error_m"}
+        folder, prefix, {"time", "tracking_error_m"}, trajectories=TRAJECTORIES
     ):
         run = df[["time", "tracking_error_m"]].copy()
         run.attrs["run_id"] = f"{path.stem}_rep{repetition_id}"
@@ -70,12 +73,13 @@ def aggregate_runs(runs):
 def main(settings=None):
     configure(settings)
     fig, axes = plt.subplots(
-        2, 1,
-        figsize=(6.5, 7.0),
+        len(SCENARIOS), 1,
+        figsize=(6.5, 3.5 * len(SCENARIOS)),
         sharex=True,
         sharey=True,
     )
 
+    axes = np.atleast_1d(axes)
     for ax, (scenario, folder) in zip(axes, SCENARIOS.items()):
         for controller, info in CONTROLLERS.items():
             runs = load_controller_runs(folder, info["prefix"])
@@ -119,7 +123,7 @@ def main(settings=None):
         bbox_to_anchor=(0.5, 0.995),
     )
 
-    fig.tight_layout(rect=(0, 0, 1, 0.95))
+    fig.tight_layout(rect=(0, 0, 1, 0.86 if len(SCENARIOS) == 1 else 0.95))
 
     for extension in ("pdf", "png"):
         path = OUTPUT_DIR / f"path_tracking_error_mean_std.{extension}"

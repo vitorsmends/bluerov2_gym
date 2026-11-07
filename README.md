@@ -110,6 +110,61 @@ O setup funciona mesmo quando o ambiente não possui `pip`.
 
 ## Treinamento de trajetória recuperado de `889a766`
 
+Para o experimento **sem currículo com a mecânica histórica de
+`train_stable_traj`**, use este perfil separado:
+
+```bash
+bluerov train --config configs/training/trajectory_889_std.yaml \
+  --output artifacts/training/trajectory_889_std
+```
+
+Ele mantém o mesmo PPO, seed 42, mar e orçamento do perfil
+`trajectory_889_frozen`, mas usa `mechanics_model: std` e os coeficientes de
+amortecimento antigos. Apenas selecionar `std` sem trocar os coeficientes
+explícitos do YAML principal não reproduziria aquela branch. A configuração
+principal de física corrigida permanece igual. O perfil foi comparado à dinâmica
+da branch `train_stable_traj` em 600 passos pareados, com resultados idênticos.
+
+Após o treinamento, avalie no quadrado com a mesma física do treino:
+
+```bash
+bluerov evaluate --config configs/evaluation/trajectory_889_std.yaml \
+  --output artifacts/evaluation/trajectory_889_std
+bluerov plot --run artifacts/evaluation/trajectory_889_std --suite trajectories
+bluerov plot --run artifacts/evaluation/trajectory_889_std --suite article
+```
+
+Para testar **a transferência para a física corrigida atual**, use a configuração
+explícita de avaliação abaixo. Ela não herda a física do treino, intencionalmente:
+
+```bash
+bluerov evaluate --config configs/evaluation/trajectory_889_std_current_physics.yaml \
+  --output artifacts/evaluation/trajectory_889_std_current_physics
+bluerov plot --run artifacts/evaluation/trajectory_889_std_current_physics --suite trajectories
+bluerov plot --run artifacts/evaluation/trajectory_889_std_current_physics --suite article
+```
+
+Para conferir a reprodução usando uma cópia **literal** do script histórico,
+há um perfil isolado. O arquivo original fica em
+`bluerov2_gym/workflows/training/reference_sources/trajectory_889a766.py`, com
+hash verificado ao criar o ambiente. Seu reset e feedback/recompensa são
+executados sobre a física atual. O perfil usa seed 42 para repetir o experimento;
+a seed do modelo histórico é desconhecida. Não garante os mesmos pesos finais.
+
+```bash
+bluerov train --config configs/training/trajectory_889_frozen.yaml \
+  --output artifacts/training/trajectory_889_frozen
+bluerov evaluate --config configs/evaluation/trajectory_889_frozen.yaml \
+  --output artifacts/evaluation/trajectory_889_frozen
+bluerov plot --run artifacts/evaluation/trajectory_889_frozen --suite trajectories
+bluerov plot --run artifacts/evaluation/trajectory_889_frozen --suite article
+```
+
+Esse perfil mantém PPO de um milhão de passos, 10 epochs, rede padrão 64/64,
+learning rate `3e-4` e entropia `0.01`, sem currículo. A integração acrescenta
+somente seleção de dispositivo, pastas de artefatos e monitoramento. Não execute
+o arquivo histórico diretamente: seus caminhos de saída são os da versão antiga.
+
 O caminho que replica o script `experiments_traj/train_ppo.py` fornecido pelo
 usuário é `configs/training/trajectory_reference.yaml`. Ele usa a **arquitetura
 e o treinamento de trajetória originais**, sobre a dinâmica e os distúrbios
@@ -154,6 +209,39 @@ está em [Treinamento de trajetória de referência](docs/trajectory_training_re
 
 O currículo segue disponível como padrão **para station keeping**, assim como
 o experimento sem currículo. Eles não são substitutos deste treino de trajetória.
+
+## Currículo de mecânica e ondas para trajetórias
+
+O perfil `trajectory_curriculum.yaml` treina a figura oito de `889a766` em seis
+fases: std sem ondas; std da `train_stable_traj`; física corrigida com quatro
+níveis crescentes de mar. Preserva rede 64/64, feedback, recompensa, política,
+otimizador e normalização. Nos quatro níveis finais, Hs controla a energia do
+espectro por normalização explícita; os filtros históricos são mantidos.
+
+```bash
+bluerov train --config configs/training/trajectory_curriculum.yaml \
+  --output artifacts/training/physics_wave_curriculum
+```
+
+São **3 milhões de passos planejados por fase**, sem teto rígido nem avanço
+por orçamento. As fases terminam por domínio em avaliações independentes de
+100 s, com o normalizador congelado. O treino preserva a ausência de TimeLimit
+histórica. O treino completo pode usar menos ou mais que 18 milhões de passos.
+
+Em outro terminal, acompanhe no navegador:
+
+```bash
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/physics_wave_curriculum
+```
+
+O painel mostra fase/mecânica, mar efetivamente amostrado, avaliações aprovadas,
+passos e estimativa de tempo até a referência de planejamento. Essa estimativa
+não é uma previsão de quando o agente dominará a fase.
+
+O currículo anterior com rotação de trajetórias permanece separado em
+`configs/training/trajectory_curriculum_legacy.yaml`.
+Veja [critérios, fases e avaliação](docs/trajectory_curriculum.md).
 
 ## Treinamento validado: station keeping por currículo
 

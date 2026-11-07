@@ -23,15 +23,17 @@ PLOTS = {
     'single_policy': PlotSpec('stationkeeping.single_policy','single_policy',('error_x','error_y','error_z')),
     'training': PlotSpec('training.curves','training'),
     'training_overview': PlotSpec('training.overview','training'),
+    'training_thesis': PlotSpec('training.thesis','training'),
     'training_checkpoints': PlotSpec('training.checkpoints','checkpoints',('training_steps','position_error_rmse_m')),
     'optimization': PlotSpec('training.optimization','optimization'),
     'ftc': PlotSpec('ftc.comparison','ftc',('x','y','x_ref','y_ref','tracking_error_m')),
 }
 SUITES = {
     'article': ('tracking_error','rmse','cpu_time','energy','pareto'),
+    'article_by_trajectory': ('tracking_error','rmse','cpu_time','energy','pareto'),
     'stationkeeping': ('stationkeeping','station_cost'),
     'trajectories': ('trajectory_spatial',),
     'single_policy': ('single_policy',),
     'legacy_path_tracking': ('path_tracking','cost','cost_tradeoff','violin'),
-    'training': ('training','training_overview'), 'training_checkpoints': ('training_checkpoints',), 'optimization': ('optimization',), 'ftc': ('ftc',),
+    'training': ('training','training_overview'), 'training_thesis': ('training_thesis',), 'training_checkpoints': ('training_checkpoints',), 'optimization': ('optimization',), 'ftc': ('ftc',),
 }

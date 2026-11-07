@@ -10,10 +10,13 @@ MARKERS = {"Moderate": "o", "Severe": "s"}
 
 
 
+TRAJECTORIES = None
+
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
     from . import config as defaults
     settings = settings or {}
+    TRAJECTORIES = settings.get("trajectory_names")
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -36,6 +39,8 @@ def compute_table():
     for scenario, folder in SCENARIOS.items():
         for controller, info in CONTROLLERS.items():
             for path in sorted(folder.glob(f"{info['prefix']}*.csv")):
+                if TRAJECTORIES is not None and path.stem[len(info["prefix"]):] not in TRAJECTORIES:
+                    continue
                 source = pd.read_csv(path)
                 if "repetition_id" not in source.columns:
                     source["repetition_id"] = 0
@@ -97,7 +102,7 @@ def main(settings=None):
         current = (
             summary[summary["controller"] == controller]
             .set_index("scenario")
-            .reindex(["Moderate", "Severe"])
+            .reindex(list(SCENARIOS))
             .dropna()
         )
 
@@ -119,7 +124,7 @@ def main(settings=None):
                 row["rmse_mean"],
                 xerr=row["cpu_std"],
                 yerr=row["rmse_std"],
-                fmt=MARKERS[scenario],
+                fmt=MARKERS.get(scenario, "o"),
                 color=info["color"],
                 markeredgecolor="black",
                 markeredgewidth=0.6,

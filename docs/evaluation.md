@@ -147,3 +147,28 @@ reproduzir o reset aleatório do treinamento.
 
 Para um setpoint fixo, use `stationkeeping_trajectory_reference.yaml`.
 Veja [os comandos e as particularidades da receita](trajectory_training_reference.md).
+
+## Agente do currículo de mecânica e ondas
+
+`configs/evaluation/trajectory_curriculum.yaml` compara o agente final com PID/SMC
+na física corrigida com espectro normalizado herdada do snapshot do treinamento.
+O cenário padrão é target (Hs=3.5 m, Tp=10 s); as trajetórias são a figura oito
+original, quadrado e círculo. O treino fica na figura oito; as demais medem
+transferência. Os caminhos apontam a `artifacts/training/physics_wave_curriculum`, como no
+comando de treinamento documentado.
+A configuração antiga permanece em `trajectory_curriculum_legacy.yaml`.
+Veja [comandos e critérios](trajectory_curriculum.md).
+
+## Gráficos tradicionais da dissertação
+
+```bash
+bluerov plot --run artifacts/evaluation/physics_wave_curriculum_comparison --suite article
+bluerov plot --run artifacts/evaluation/physics_wave_curriculum_comparison --suite article_by_trajectory
+```
+
+A primeira suíte gera erro no tempo com bandas, boxplot de RMSE, CPU, energia
+estimada e Pareto, agregando as trajetórias. A segunda gera as mesmas figuras
+separadamente por trajetória, usando apenas suas repetições. O estilo e as
+fórmulas históricos são mantidos; a seleção de cenários agora aceita target
+ou outros nomes, além de Moderate/Severe. Os arquivos ficam em figures/article
+do run, e as tabelas correspondentes em tables/article.

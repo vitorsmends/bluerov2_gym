@@ -37,7 +37,7 @@ def evaluate_checkpoints(training_run, steps=500, seed=42, stage=-1, output=None
     if steps<1:raise ValueError('steps must be positive')
     training_run=Path(training_run).expanduser().resolve()
     config=read_yaml(training_run/'config.resolved.yaml')
-    if config.get('training', {}).get('task') == 'trajectory_tracking':
+    if config.get('training', {}).get('task') in {'trajectory_tracking', 'trajectory_curriculum', 'trajectory_curriculum_legacy'}:
         raise ValueError('evaluate-checkpoints uses a stationkeeping curriculum protocol. '
                          'For trajectory-trained agents use the trajectory evaluation configuration.')
     lesson=config['curriculum'][stage]

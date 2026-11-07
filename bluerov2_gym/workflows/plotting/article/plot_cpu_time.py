@@ -10,10 +10,13 @@ from .run_data import iter_csv_runs
 
 
 
+TRAJECTORIES = None
+
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
     from . import config as defaults
     settings = settings or {}
+    TRAJECTORIES = settings.get("trajectory_names")
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -34,7 +37,7 @@ def load_cpu_runs(folder, prefix):
     runs = []
     
     for path, repetition_id, df in iter_csv_runs(
-        folder, prefix, {"time", "controller_cpu_time_s"}
+        folder, prefix, {"time", "controller_cpu_time_s"}, trajectories=TRAJECTORIES
     ):
         time = df["time"].to_numpy(dtype=float)
         cpu_ms = (

@@ -29,7 +29,7 @@ class PlotManager:
 
     def generate_suite(self, name):
         if name not in SUITES:raise ValueError(f'Unknown suite {name!r}; available: {list(SUITES)}')
-        return self.generate(SUITES[name])
+        return self.generate(SUITES[name], per_trajectory=name == 'article_by_trajectory')
 
     def settings(self, name):
         spec=PLOTS[name]
@@ -97,7 +97,7 @@ class PlotManager:
             if set(spec.required_columns)<=set(columns):valid=True
         if not valid:raise ValueError(f'{name}: required columns {spec.required_columns} not found.')
 
-    def generate(self, names):
+    def generate(self, names, per_trajectory=False):
         names=list(names)
         for name in names:
             if name not in PLOTS:raise ValueError(f'Unknown plot: {name}')
@@ -105,7 +105,14 @@ class PlotManager:
         tasks=[]
         for name in names:
             settings=self.settings(name)
-            if self.run and PLOTS[name].family=='trajectories' and not self.config.get('scenario'):
+            if self.run and PLOTS[name].family=='article' and per_trajectory:
+                for case in self.resolved.get('trajectories', []):
+                    if not case.get('enabled', True):continue
+                    variant=dict(settings, trajectory_names=[case['name']],
+                                 output_dir=str(Path(settings['output_dir'])/case['name']),
+                                 table_dir=str(Path(settings['table_dir'])/case['name']))
+                    tasks.append((name,variant))
+            elif self.run and PLOTS[name].family=='trajectories' and not self.config.get('scenario'):
                 for scenario in self._scenarios():
                     variant=dict(settings,scenario=scenario,input_dir=str(self.run/'data'/scenario),
                                  output_dir=str(self.output/name/scenario),table_dir=str(self.tables/name/scenario),
@@ -121,7 +128,8 @@ class PlotManager:
             print(f'[PLOT] {name} → {settings["output_dir"]}',flush=True)
             result=subprocess.run([sys.executable,'-m','bluerov2_gym.workflows.plotting.worker',name,json.dumps(settings)],
                                   env=env,capture_output=True,text=True)
-            log_path=self.logs/f'plot_{name}_{settings.get("scenario", "all")}.log'
+            case = '_'.join(settings.get('trajectory_names', []))
+            log_path=self.logs/f'plot_{name}_{settings.get("scenario", "all")}{"_"+case if case else ""}.log'
             log_path.write_text(result.stdout+result.stderr)
             if result.returncode:raise RuntimeError(f'Plot {name} failed. See {log_path}\n{result.stderr[-1500:]}')
         outputs=sorted(str(p) for p in self.output.rglob('*') if p.is_file() and p.suffix in {'.png','.pdf'})

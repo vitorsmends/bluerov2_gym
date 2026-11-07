@@ -1,5 +1,39 @@
 # Treinamento
 
+## Currículo de mecânica e ondas para trajetórias
+
+O perfil `trajectory_curriculum.yaml` treina a figura oito de `889a766` em seis
+fases: std sem ondas; std da `train_stable_traj`; física corrigida com quatro
+níveis crescentes de mar. Preserva rede 64/64, feedback, recompensa, política,
+otimizador e normalização. Nos quatro níveis finais, Hs controla a energia do
+espectro por normalização explícita; os filtros históricos são mantidos.
+
+```bash
+bluerov train --config configs/training/trajectory_curriculum.yaml \
+  --output artifacts/training/physics_wave_curriculum
+```
+
+São **3 milhões de passos planejados por fase**, sem teto rígido nem avanço
+por orçamento. As fases terminam por domínio em avaliações independentes de
+100 s, com o normalizador congelado. O treino preserva a ausência de TimeLimit
+histórica. O treino completo pode usar menos ou mais que 18 milhões de passos.
+
+Em outro terminal, acompanhe no navegador:
+
+```bash
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/physics_wave_curriculum
+```
+
+O painel mostra fase/mecânica, mar efetivamente amostrado, avaliações aprovadas,
+passos e estimativa de tempo até a referência de planejamento. Essa estimativa
+não é uma previsão de quando o agente dominará a fase.
+
+O currículo anterior com rotação de trajetórias permanece separado em
+`configs/training/trajectory_curriculum_legacy.yaml`.
+Veja [critérios, fases e avaliação](trajectory_curriculum.md).
+
+
 ## Treinamento de trajetória recuperado de `889a766`
 
 O caminho que replica o script `experiments_traj/train_ppo.py` fornecido pelo

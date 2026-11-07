@@ -6,8 +6,17 @@
 <style>
 :root{font-family:system-ui,sans-serif;color:#203047;background:#f3f6fa}body{max-width:1180px;margin:30px auto;padding:0 20px}h1{font-size:26px;margin:0 0 8px}h2{font-size:17px;margin:0 0 12px}.muted{color:#617086;font-size:14px}header{margin-bottom:24px}.panel,.card{background:white;border:1px solid #dce4ed;border-radius:12px;padding:20px;margin-bottom:16px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.card strong{display:block;font-size:26px;margin-top:8px}.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}select{padding:7px;border:1px solid #cbd5e1;border-radius:6px;background:white;color:inherit}canvas{display:block;width:100%;height:285px}.legend{display:flex;gap:20px;font-size:13px;margin-bottom:8px}.legend span:before{content:'●';color:var(--color);margin-right:6px}#phase{font-weight:600;margin-bottom:7px}#connection{min-height:20px}#connection.error{color:#b42318}footer{font-size:13px;color:#617086;margin:20px 0}@media(max-width:650px){.cards{grid-template-columns:1fr}.card{margin:0}.cards{margin-bottom:16px}body{margin-top:18px}canvas{height:250px}}
 </style>
+<style>
+.progress-heading{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px}.progress-heading strong{font-size:18px}progress{display:block;width:100%;height:18px;accent-color:#357ac5;margin-bottom:10px}.timing{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:18px}.timing strong{display:block;font-size:23px;margin-top:6px;font-variant-numeric:tabular-nums}@media(max-width:650px){.timing{grid-template-columns:1fr;gap:14px}}
+</style>
 <header><h1>Treinamento PPO ao vivo</h1><div id="run" class="muted">Conectando aos logs…</div></header>
-<section class="panel"><div id="phase">Aguardando configuração</div><div id="sea" class="muted"></div></section>
+<section class="panel"><div id="phase">Aguardando configuração</div><div id="sea" class="muted"></div><div id="coverage" class="muted"></div></section>
+<section class="panel" aria-label="Progresso e tempo de treinamento">
+<div class="progress-heading"><strong>Progresso do treinamento</strong><span id="progressText" class="muted">Aguardando dados…</span></div>
+<progress id="trainingProgress" max="100" aria-label="Percentual de passos concluídos"></progress>
+<div id="progressDetail" class="muted"></div>
+<div class="timing"><div><span class="muted" id="elapsedLabel">Tempo decorrido</span><strong id="elapsed">—</strong></div><div><span class="muted" id="remainingLabel">Tempo restante estimado</span><strong id="remaining">—</strong></div><div><span class="muted" id="estimatedTotalLabel">Duração total estimada</span><strong id="estimatedTotal">—</strong></div></div>
+</section>
 <div class="cards"><div class="card"><span class="muted">Passos registrados</span><strong id="steps">—</strong></div><div class="card"><span class="muted" id="rewardLabel">Reward médio por episódio</span><strong id="reward">—</strong></div><div class="card"><span class="muted">Erro euclidiano médio</span><strong id="error">—</strong></div></div>
 <div class="toolbar"><div id="connection" class="muted">Aguardando dados…</div><label class="muted">Média móvel <select id="window"><option value="1">Sem suavização</option><option value="5" selected>5 registros</option><option value="10">10 registros</option><option value="20">20 registros</option></select></label></div>
 <section class="panel"><h2 id="rewardTitle">Reward por episódio</h2><div class="legend"><span id="rewardLegend" style="--color:#29996a">Média dos últimos episódios</span></div><canvas id="rewardChart" role="img" aria-label="Reward por passos de treinamento"></canvas></section>
@@ -16,6 +25,38 @@
 <script>
 let current=null;
 const $=id=>document.getElementById(id),num=x=>x.toLocaleString('pt-BR',{maximumFractionDigits:3});
+function duration(seconds){if(seconds==null||!Number.isFinite(seconds))return '—';const total=Math.max(0,Math.floor(seconds)),h=Math.floor(total/3600),m=Math.floor(total%3600/60),s=total%60;return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');}
+function renderProgress(data){
+  const p=data.progress||{},bar=$('trainingProgress'),plan=p.phase_plan;
+  $('elapsedLabel').textContent=plan?'Tempo decorrido na fase':'Tempo decorrido';
+  $('remainingLabel').textContent=plan?'Até a referência de passos (estimativa)':'Tempo restante estimado';
+  $('estimatedTotalLabel').textContent=plan?'Tempo estimado até a referência':'Duração total estimada';
+  if(plan){
+    bar.value=Math.min(100,plan.percent);
+    $('progressText').textContent=num(plan.steps)+' / '+num(plan.planned_steps)+' passos planejados na fase';
+    $('elapsed').textContent=duration(plan.elapsed_seconds);
+    $('remaining').textContent=duration(plan.remaining_seconds);
+    $('estimatedTotal').textContent=duration(plan.estimated_total_seconds);
+    const gate=data.curriculum?.last_evaluation;
+    $('progressDetail').textContent='Referência de planejamento, sem limite rígido. Avanço somente por domínio nas avaliações.'+
+      (plan.percent>=100?' A fase pode continuar além dos passos planejados.':'')+
+      (gate?' Última bateria: '+num(100*gate.success_rate)+'% de sucesso.':' Aguardando a primeira bateria de avaliação.')+
+      (gate?.mean_rmse_m!=null?' RMSE médio: '+num(gate.mean_rmse_m)+' m.':'');
+    return;
+  }
+  if(p.percent==null){bar.removeAttribute('value');$('progressText').textContent=p.unlimited?'Sem total de passos definido':'Aguardando total de passos';}
+  else{bar.value=p.percent;$('progressText').textContent=p.percent.toLocaleString('pt-BR',{maximumFractionDigits:1})+'% · '+num(data.step)+' / '+num(p.total_steps)+' passos';}
+  $('elapsed').textContent=duration(p.elapsed_seconds);$('remaining').textContent=duration(p.remaining_seconds);$('estimatedTotal').textContent=duration(p.estimated_total_seconds);
+  let note=p.unlimited?'Currículo avança por objetivo; não há prazo de conclusão calculável.':'Estimativa pela velocidade dos últimos registros; pode variar durante o treino.';
+  if(p.total_steps)note+=' Total considera rollouts completos.';
+  if(p.steps_per_second!=null)note+=' '+num(p.steps_per_second)+' passos/s.';
+  if(p.stale&&data.status!=='completed')note='Sem registros recentes; estimativa de conclusão indisponível.';
+  if(data.status==='completed')note='Treino concluído. Tempo medido até o último registro do TensorBoard.';
+  else if(['interrupted','failed','early_stopped'].includes(data.status))note='Execução encerrada. Tempo medido até o último registro; sem previsão de conclusão.';
+  else if(p.percent===100)note='Passos coletados; aguardando fim da otimização e gravação do modelo.';
+  $('progressDetail').textContent=note;
+}
+
 function smooth(points,n){if(!points.length)return [];n=Math.min(n,points.length);let sum=0,out=[];for(let i=0;i<points.length;i++){sum+=points[i][1];if(i>=n)sum-=points[i-n][1];if(i>=n-1)out.push([points[i][0],sum/n]);}return out;}
 function chart(id,definitions){const c=$(id),r=c.getBoundingClientRect(),dpr=window.devicePixelRatio||1;c.width=r.width*dpr;c.height=r.height*dpr;const ctx=c.getContext('2d');ctx.scale(dpr,dpr);const w=r.width,h=r.height,L=72,R=18,T=18,B=46,all=definitions.flatMap(d=>d.points);ctx.font='12px system-ui';ctx.fillStyle='#617086';if(!all.length){ctx.textAlign='center';ctx.fillText('Aguardando registros desta métrica…',w/2,h/2);return;}
 const maxX=Math.max(1,...all.map(p=>p[0]));let minY=Math.min(...all.map(p=>p[1])),maxY=Math.max(...all.map(p=>p[1]));const pad=Math.max((maxY-minY)*.1,Math.abs(maxY)*.01,.01);minY-=pad;maxY+=pad;const x=v=>L+v/maxX*(w-L-R),y=v=>h-B-(v-minY)/(maxY-minY)*(h-T-B);
@@ -25,7 +66,7 @@ function line(points,color,alpha,width){ctx.strokeStyle=color;ctx.fillStyle=colo
 for(const d of definitions){line(d.points,d.color,.22,1);line(smooth(d.points,Number($('window').value)),d.color,1,2);}ctx.textAlign='center';ctx.fillStyle='#617086';ctx.fillText('Passos de interação com o ambiente',L+(w-L-R)/2,h-3);}
 function rewardSeries(){const step=current.series.reward_step||[];return step.length?step:(current.series.reward||[]);}
 function draw(){if(!current)return;const perEpisode=!(current.series.reward_step||[]).length&&(current.series.reward||[]).length>0;$('rewardLabel').textContent=perEpisode?'Reward médio por episódio':'Reward bruto médio por passo';$('rewardTitle').textContent=perEpisode?'Reward por episódio':'Reward bruto por passo';$('rewardLegend').textContent=perEpisode?'Média dos últimos episódios':'Média do rollout antes da normalização';chart('rewardChart',[{points:rewardSeries(),color:'#29996a'}]);chart('errorChart',[{points:current.series.error||[],color:'#357ac5'},{points:current.series.rmse||[],color:'#dc625b'}]);}
-async function update(){let delay=5000;try{const response=await fetch('/api/training',{cache:'no-store'}),data=await response.json();if(!response.ok)throw new Error(data.error||'Falha ao ler os logs');current=data;delay=data.refresh_seconds*1000;$('run').textContent=data.run;$('phase').textContent=data.phase;$('sea').textContent=data.sea;$('steps').textContent=num(data.step);for(const key of ['reward','error']){const p=key==='reward'?rewardSeries():(data.series[key]||[]);$(key).textContent=p.length?num(p[p.length-1][1])+(key==='error'?' m':''):'—';}const state={completed:'Treino concluído',failed:'Execução encerrada com erro',early_stopped:'Early stopping por estagnação',created:'Execução aberta'}[data.status]||'Monitorando registros';$('connection').className='muted';$('connection').textContent=state+' · leitura às '+new Date(data.read_at*1000).toLocaleTimeString('pt-BR');$('note').textContent='Consulta a cada '+data.refresh_seconds+' s; novos valores a cada rollout'+(data.rollout_steps?' de '+num(data.rollout_steps)+' passos':'')+'. Linhas claras e cartões mostram valores brutos; linhas fortes usam a média móvel. Pontilhados indicam mudanças de fase. Fechar a página não interrompe o treino.';draw();}catch(e){$('connection').className='error';$('connection').textContent='Sem atualização: '+e.message+' — tentando novamente…';}setTimeout(update,delay);}
+async function update(){let delay=5000;try{const response=await fetch('/api/training',{cache:'no-store'}),data=await response.json();if(!response.ok)throw new Error(data.error||'Falha ao ler os logs');current=data;renderProgress(data);delay=data.refresh_seconds*1000;$('run').textContent=data.run;$('phase').textContent=data.phase;$('sea').textContent=data.sea;const coverage=data.curriculum?.trajectory_successes,required=data.curriculum?.required_episodes||3;$('coverage').textContent=coverage?Object.entries(coverage).map(([name,count])=>name+': '+Math.min(count,required)+'/'+required).join(' · '):'';$('steps').textContent=num(data.step);for(const key of ['reward','error']){const p=key==='reward'?rewardSeries():(data.series[key]||[]);$(key).textContent=p.length?num(p[p.length-1][1])+(key==='error'?' m':''):'—';}const state={completed:'Treino concluído',interrupted:'Treino interrompido',failed:'Execução encerrada com erro',early_stopped:'Early stopping por estagnação',created:'Execução aberta'}[data.status]||'Monitorando registros';$('connection').className='muted';$('connection').textContent=state+' · leitura às '+new Date(data.read_at*1000).toLocaleTimeString('pt-BR');$('note').textContent='Consulta a cada '+data.refresh_seconds+' s; novos valores a cada rollout'+(data.rollout_steps?' de '+num(data.rollout_steps)+' passos':'')+'. Linhas claras e cartões mostram valores brutos; linhas fortes usam a média móvel. Pontilhados indicam mudanças de fase. Fechar a página não interrompe o treino.';draw();}catch(e){$('connection').className='error';$('connection').textContent='Sem atualização: '+e.message+' — tentando novamente…';}setTimeout(update,delay);}
 $('window').addEventListener('change',draw);new ResizeObserver(draw).observe($('rewardChart'));update();
 </script>
 </html>

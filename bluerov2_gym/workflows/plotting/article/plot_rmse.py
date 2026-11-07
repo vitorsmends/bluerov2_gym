@@ -10,10 +10,13 @@ from .run_data import iter_csv_runs
 
 
 
+TRAJECTORIES = None
+
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
     from . import config as defaults
     settings = settings or {}
+    TRAJECTORIES = settings.get("trajectory_names")
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -39,7 +42,7 @@ def compute_rmse_table():
     for scenario, folder in SCENARIOS.items():
         for controller, info in CONTROLLERS.items():
             for path, repetition_id, df in iter_csv_runs(
-                folder, info["prefix"], {"time", "tracking_error_m"}
+                folder, info["prefix"], {"time", "tracking_error_m"}, trajectories=TRAJECTORIES
             ):
                 error = df["tracking_error_m"].to_numpy(dtype=float)
 
@@ -72,7 +75,12 @@ def main(settings=None):
 
     fig, ax = plt.subplots(figsize=FIGSIZE)
 
-    for scenario in ["Moderate", "Severe"]:
+    scenarios = list(SCENARIOS)
+    offsets = [0.] if len(scenarios) == 1 else np.linspace(-.18, .18, len(scenarios))
+    widths = .30 if len(scenarios) <= 2 else .6 / len(scenarios)
+    hatches = {name: SCENARIO_HATCH.get(name, ['', '///', '...', 'xx'][i % 4])
+               for i, name in enumerate(scenarios)}
+    for scenario, offset in zip(scenarios, offsets):
         data = [
             table.loc[
                 (table["controller"] == controller)
@@ -84,8 +92,8 @@ def main(settings=None):
 
         boxes = ax.boxplot(
             data,
-            positions=positions + SCENARIO_OFFSETS[scenario],
-            widths=0.30,
+            positions=positions + offset,
+            widths=widths,
             patch_artist=True,
             showmeans=True,
             meanprops={
@@ -100,7 +108,7 @@ def main(settings=None):
         for patch, controller in zip(boxes["boxes"], controllers):
             patch.set_facecolor(CONTROLLERS[controller]["color"])
             patch.set_alpha(0.55)
-            patch.set_hatch(SCENARIO_HATCH[scenario])
+            patch.set_hatch(hatches[scenario])
             patch.set_edgecolor("black")
 
     ax.set_xticks(positions)
@@ -108,15 +116,8 @@ def main(settings=None):
     ax.set_ylabel("RMSE [m]")
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
 
-    legend = [
-        Patch(facecolor="white", edgecolor="black", label="Moderate"),
-        Patch(
-            facecolor="white",
-            edgecolor="black",
-            hatch="///",
-            label="Severe",
-        ),
-    ]
+    legend = [Patch(facecolor="white", edgecolor="black", hatch=hatches[name], label=name)
+              for name in scenarios]
     ax.legend(handles=legend, frameon=True, loc="best")
 
     fig.tight_layout()

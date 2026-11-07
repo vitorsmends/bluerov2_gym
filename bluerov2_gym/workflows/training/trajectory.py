@@ -38,12 +38,19 @@ class TensorboardCallback(BaseCallback):
 
 def train_trajectory(config):
     environment = config['environment']
+    env_class = TrajectoryTrackingEnv
+    entry_point = environment.get('entry_point')
+    if entry_point == 'bluerov2_gym.workflows.training.trajectory_frozen_env:Frozen889TrajectoryEnv':
+        from .trajectory_frozen_env import Frozen889TrajectoryEnv
+        env_class = Frozen889TrajectoryEnv
+    elif entry_point not in (None, 'bluerov2_gym.workflows.training.trajectory_env:TrajectoryTrackingEnv'):
+        raise ValueError(f'Unsupported trajectory training entry point: {entry_point}')
     paths = config['paths']
     models = Path(paths['model_dir'])
     models.mkdir(parents=True, exist_ok=True)
 
     def make_env():
-        env = TrajectoryTrackingEnv(
+        env = env_class(
             env_config=environment.get('config'),
             dynamics_config=environment['dynamics_config'],
         )
@@ -78,6 +85,7 @@ def train_trajectory(config):
                         execution_device=device, observation_adapter='legacy',
                         policy_kwargs=model.policy_kwargs,
                         policy_architecture=str(model.policy),
+                        environment_class=f'{env_class.__module__}:{env_class.__name__}',
                         effective_episode_limit=environment.get('max_episode_steps'))
         write_yaml(manifest_path, manifest)
         print('Task: trajectory_tracking | reference 889a766 | current dynamics/disturbance', flush=True)
