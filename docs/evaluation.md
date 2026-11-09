@@ -172,3 +172,18 @@ separadamente por trajetória, usando apenas suas repetições. O estilo e as
 fórmulas históricos são mantidos; a seleção de cenários agora aceita target
 ou outros nomes, além de Moderate/Severe. Os arquivos ficam em figures/article
 do run, e as tabelas correspondentes em tables/article.
+
+## Somente erro de yaw
+
+```bash
+bluerov plot --run artifacts/evaluation/physics_wave_curriculum_comparison --plots yaw_error
+bluerov plot --run artifacts/evaluation/physics_wave_curriculum_comparison --plots yaw_error --per-trajectory
+```
+
+O primeiro comando gera o resumo agregado; o segundo gera uma figura por
+trajetória, sem refazer os outros gráficos. O erro é o módulo do menor erro
+angular, convertido de radianos para graus: abs(atan2(sin(e), cos(e))). Curva
+média e banda de um desvio-padrão populacional, com a banda limitada a [0,180]°.
+Isso evita cancelamento entre erros de sinais opostos e artefatos em +/-pi.
+PNG/PDF: figures/article/yaw_error_mean_std.*; com --per-trajectory, dentro
+da subpasta da trajetória. A tabela correspondente fica em tables/article.

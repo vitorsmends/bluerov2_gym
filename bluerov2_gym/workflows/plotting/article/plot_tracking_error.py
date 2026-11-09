@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 from .config import (
     SCENARIOS, CONTROLLERS, OUTPUT_DIR,
-    DPI, LINE_WIDTH, BAND_ALPHA,
+    DPI, LINE_WIDTH, BAND_ALPHA, FIGSIZE,
 )
 from .run_data import iter_csv_runs
 
@@ -47,7 +47,7 @@ def load_controller_runs(folder, prefix):
     return runs
 
 
-def aggregate_runs(runs):
+def aggregate_runs(runs, column='tracking_error_m'):
     if not runs:
         return None
 
@@ -55,7 +55,7 @@ def aggregate_runs(runs):
 
     for index, df in enumerate(runs):
         current = (
-            df.groupby("time", as_index=True)["tracking_error_m"]
+            df.groupby("time", as_index=True)[column]
             .mean()
             .rename(df.attrs.get("run_id", f"run_{index}"))
         )
@@ -74,7 +74,7 @@ def main(settings=None):
     configure(settings)
     fig, axes = plt.subplots(
         len(SCENARIOS), 1,
-        figsize=(6.5, 3.5 * len(SCENARIOS)),
+        figsize=(FIGSIZE[0], FIGSIZE[1] * len(SCENARIOS)),
         sharex=True,
         sharey=True,
     )
@@ -107,7 +107,6 @@ def main(settings=None):
                 linewidth=0,
             )
 
-        ax.set_title(scenario)
         ax.set_ylabel("Tracking error [m]")
         ax.grid(True, linestyle="--", alpha=0.5)
 
@@ -123,7 +122,7 @@ def main(settings=None):
         bbox_to_anchor=(0.5, 0.995),
     )
 
-    fig.tight_layout(rect=(0, 0, 1, 0.86 if len(SCENARIOS) == 1 else 0.95))
+    fig.tight_layout(rect=(0, 0, 1, 0.90 if len(SCENARIOS) == 1 else 0.95))
 
     for extension in ("pdf", "png"):
         path = OUTPUT_DIR / f"path_tracking_error_mean_std.{extension}"

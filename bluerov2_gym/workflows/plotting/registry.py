@@ -9,6 +9,7 @@ class PlotSpec:
 
 PLOTS = {
     'tracking_error': PlotSpec('article.plot_tracking_error','article',('time','tracking_error_m')),
+    'yaw_error': PlotSpec('article.plot_yaw_error','article',('time','yaw_error')),
     'rmse': PlotSpec('article.plot_rmse','article',('time','tracking_error_m')),
     'cpu_time': PlotSpec('article.plot_cpu_time','article',('time','controller_cpu_time_s')),
     'energy': PlotSpec('article.plot_energy','article',('time',*[f'T{i}' for i in range(1,7)])),
@@ -29,8 +30,8 @@ PLOTS = {
     'ftc': PlotSpec('ftc.comparison','ftc',('x','y','x_ref','y_ref','tracking_error_m')),
 }
 SUITES = {
-    'article': ('tracking_error','rmse','cpu_time','energy','pareto'),
-    'article_by_trajectory': ('tracking_error','rmse','cpu_time','energy','pareto'),
+    'article': ('tracking_error','yaw_error','rmse','cpu_time','energy','pareto'),
+    'article_by_trajectory': ('tracking_error','yaw_error','rmse','cpu_time','energy','pareto'),
     'stationkeeping': ('stationkeeping','station_cost'),
     'trajectories': ('trajectory_spatial',),
     'single_policy': ('single_policy',),

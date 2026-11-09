@@ -137,7 +137,7 @@ def plot(args):
     if args.scenario:settings['scenario']=args.scenario
     if args.repetition_id is not None:settings['repetition_id']=args.repetition_id
     manager=PlotManager(args.run,settings)
-    result=manager.generate(args.plots) if args.plots else manager.generate_suite(args.suite or settings.get('suite','article'))
+    result=manager.generate(args.plots, per_trajectory=getattr(args, 'per_trajectory', False)) if args.plots else manager.generate_suite(args.suite or settings.get('suite','article'))
     print(f'Generated {len(result)} figure files.')
 
 
@@ -159,6 +159,7 @@ def main(argv=None):
         p.add_argument('--config',type=Path)
         p.add_argument('--suite',default='training' if name=='plot-training' else None)
         p.add_argument('--plots',nargs='+')
+        p.add_argument('--per-trajectory',action='store_true',help='Generate selected article plots separately for each trajectory.')
         p.add_argument('--scenario')
         p.add_argument('--repetition-id',type=int)
     checkpoints=commands.add_parser('evaluate-checkpoints')
