@@ -78,8 +78,14 @@ def main(settings=None):
     scenarios = list(SCENARIOS)
     offsets = [0.] if len(scenarios) == 1 else np.linspace(-.18, .18, len(scenarios))
     widths = .30 if len(scenarios) <= 2 else .6 / len(scenarios)
+    if len(scenarios) > 2:
+        offsets = np.linspace(-.24, .24, len(scenarios))
+        widths = .8 * (offsets[1] - offsets[0])
     hatches = {name: SCENARIO_HATCH.get(name, ['', '///', '...', 'xx'][i % 4])
                for i, name in enumerate(scenarios)}
+    if len(scenarios) > 2:
+        hatches = {name: ['', '///', 'xx', '...'][i % 4]
+                   for i, name in enumerate(scenarios)}
     for scenario, offset in zip(scenarios, offsets):
         data = [
             table.loc[

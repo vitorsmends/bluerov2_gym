@@ -11,12 +11,14 @@ MARKERS = {"Moderate": "o", "Severe": "s"}
 
 
 TRAJECTORIES = None
+AGGREGATE_SCENARIOS = True
 
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES, AGGREGATE_SCENARIOS
     from . import config as defaults
     settings = settings or {}
     TRAJECTORIES = settings.get("trajectory_names")
+    AGGREGATE_SCENARIOS = settings.get("aggregate_scenarios", True)
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -94,6 +96,14 @@ def main(settings=None):
             cpu_std=("cpu_mean_ms", lambda x: np.std(x, ddof=0)),
         )
     )
+    summary.to_csv(TABLE_DIR / "pareto_summary_by_scenario.csv", index=False)
+    if AGGREGATE_SCENARIOS:
+        summary = table.groupby("controller", as_index=False).agg(
+            rmse_mean=("rmse_error_m", "mean"),
+            rmse_std=("rmse_error_m", lambda x: np.std(x, ddof=0)),
+            cpu_mean=("cpu_mean_ms", "mean"),
+            cpu_std=("cpu_mean_ms", lambda x: np.std(x, ddof=0)))
+        summary["scenario"] = "All"
     summary.to_csv(TABLE_DIR / "pareto_summary.csv", index=False)
 
     fig, ax = plt.subplots(figsize=FIGSIZE)
@@ -102,7 +112,7 @@ def main(settings=None):
         current = (
             summary[summary["controller"] == controller]
             .set_index("scenario")
-            .reindex(list(SCENARIOS))
+            .reindex(["All"] if AGGREGATE_SCENARIOS else list(SCENARIOS))
             .dropna()
         )
 
@@ -130,7 +140,7 @@ def main(settings=None):
                 markeredgewidth=0.6,
                 markersize=7,
                 capsize=3,
-                label=f"{controller} ({scenario})",
+                label=controller if AGGREGATE_SCENARIOS else f"{controller} ({scenario})",
             )
 
     ax.set_xlabel("Mean CPU time per step [ms]")

@@ -56,6 +56,13 @@ class PhysicsCurriculumEnv(Frozen889TrajectoryEnv):
     """Preserve 889 feedback/reward; replace all mechanics consistently at reset."""
     def __init__(self, config, context_seed=None):
         self.curriculum_config = config
+        tracking = config['environment'].get('yaw_tracking', {})
+        self.yaw_weight = float(tracking.get('weight', 0.))
+        self.yaw_feedback = bool(tracking.get('relative_observation', False))
+        if not np.isfinite(self.yaw_weight) or self.yaw_weight < 0:
+            raise ValueError('yaw_tracking.weight must be finite and nonnegative.')
+        if self.yaw_weight and not self.yaw_feedback:
+            raise ValueError('Yaw penalty requires relative_observation=true.')
         self.stage_index = 0
         self.context_rng = np.random.default_rng(context_seed)
         self.stage_resets = 0
@@ -91,10 +98,26 @@ class PhysicsCurriculumEnv(Frozen889TrajectoryEnv):
         self.current_context = context
         self.jonswap_params = deepcopy(context['jonswap'])
         self.dynamics = Dynamics(dynamics_config=context_dynamics_config(self.curriculum_config, context))
-        return super().reset(seed=seed, options=options)
+        obs, info = super().reset(seed=seed, options=options)
+        if self.yaw_feedback:
+            from ..evaluation.env_utils import build_tracking_observation
+            pos, att, vel = self.traj.get_state_at_time(self.current_t)
+            obs = build_tracking_observation(obs, np.concatenate([pos, att, vel, np.zeros(3)]),
+                                             'legacy_yaw_error')
+        return obs, info
 
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)
+        target_yaw = float(self.traj.get_state_at_time(self.current_t)[1][2])
+        delta = float(self.state['yaw']) - target_yaw
+        error = float(np.arctan2(np.sin(delta), np.cos(delta)))
+        penalty = self.yaw_weight * abs(error)
+        reward -= penalty
+        if self.yaw_feedback:
+            obs['yaw'] = np.array([error], dtype=np.float32)
+        info['metrics/yaw_error_abs_deg'] = float(np.degrees(abs(error)))
+        info['metrics/yaw_penalty'] = penalty
+        info['metrics/trajectory_reward_raw'] = reward
         info['curriculum/stage'] = self.stage_index + 1
         info['curriculum/context_stage'] = self.current_context['stage_index'] + 1
         return obs, reward, terminated, truncated, info

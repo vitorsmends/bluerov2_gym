@@ -256,7 +256,7 @@ def train_trajectory_curriculum(config):
             model = PPO(policy, env, seed=seed, device=device,
                         tensorboard_log=paths['tensorboard_log'], **params)
         metadata = dict(config=config, task='trajectory_curriculum', execution_device=device,
-                        observation_adapter='legacy', policy_kwargs=model.policy_kwargs,
+                        observation_adapter=('legacy_yaw_error' if base.yaw_feedback else 'legacy'), policy_kwargs=model.policy_kwargs,
                         policy_architecture=str(model.policy), effective_episode_limit=None)
         write_yaml(metadata_path, metadata)
         checkpoint = config['checkpoint']

@@ -13,12 +13,14 @@ from .run_data import iter_csv_runs
 
 
 TRAJECTORIES = None
+POOL_SCENARIOS = False
 
 def configure(settings=None):
-    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES
+    global OUTPUT_DIR, TABLE_DIR, SCENARIOS, CONTROLLERS, TRAJECTORIES, POOL_SCENARIOS
     from . import config as defaults
     settings = settings or {}
     TRAJECTORIES = settings.get("trajectory_names")
+    POOL_SCENARIOS = settings.get("pool_scenarios", False)
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
@@ -72,17 +74,25 @@ def aggregate_runs(runs, column='tracking_error_m'):
 
 def main(settings=None):
     configure(settings)
+    if POOL_SCENARIOS:
+        panels = [("All sea states", list(SCENARIOS.values()))]
+    else:
+        panels = [(scenario, [folder]) for scenario, folder in SCENARIOS.items()]
     fig, axes = plt.subplots(
-        len(SCENARIOS), 1,
-        figsize=(FIGSIZE[0], FIGSIZE[1] * len(SCENARIOS)),
+        len(panels), 1,
+        figsize=(FIGSIZE[0], FIGSIZE[1] * len(panels)),
         sharex=True,
         sharey=True,
     )
 
     axes = np.atleast_1d(axes)
-    for ax, (scenario, folder) in zip(axes, SCENARIOS.items()):
+    for ax, (scenario, folders) in zip(axes, panels):
         for controller, info in CONTROLLERS.items():
-            runs = load_controller_runs(folder, info["prefix"])
+            runs = [
+                run
+                for folder in folders
+                for run in load_controller_runs(folder, info["prefix"])
+            ]
             result = aggregate_runs(runs)
 
             if result is None:

@@ -14,12 +14,17 @@ class PositionErrorCallback(BaseCallback):
         self.episode_sum = np.zeros(self.training_env.num_envs)
         self.episode_count = np.zeros(self.training_env.num_envs, dtype=int)
         self.errors = []
+        self.yaw_errors = []
 
     def _on_rollout_start(self):
         self.errors = []
+        self.yaw_errors = []
 
     def _on_step(self):
         for i, (info, done) in enumerate(zip(self.locals['infos'], self.locals['dones'])):
+            yaw = info.get('metrics/yaw_error_abs_deg')
+            if yaw is not None and np.isfinite(yaw):
+                self.yaw_errors.append(float(yaw))
             value = info.get('metrics/position_error_euclidean')
             if value is not None and np.isfinite(value):
                 value = float(value)
@@ -34,6 +39,10 @@ class PositionErrorCallback(BaseCallback):
         return True
 
     def _on_rollout_end(self):
+        if self.yaw_errors:
+            yaw = np.asarray(self.yaw_errors)
+            self.logger.record('rollout/yaw_error_mean_deg', float(yaw.mean()))
+            self.logger.record('rollout/yaw_error_rmse_deg', float(np.sqrt(np.mean(yaw**2))))
         if self.errors:
             values = np.asarray(self.errors)
             self.logger.record('rollout/position_error_mean_m', float(values.mean()))

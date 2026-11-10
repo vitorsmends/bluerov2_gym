@@ -187,3 +187,80 @@ média e banda de um desvio-padrão populacional, com a banda limitada a [0,180]
 Isso evita cancelamento entre erros de sinais opostos e artefatos em +/-pi.
 PNG/PDF: figures/article/yaw_error_mean_std.*; com --per-trajectory, dentro
 da subpasta da trajetória. A tabela correspondente fica em tables/article.
+
+### Three sea states: Calm, Moderate and Rough
+
+The configuration `configs/evaluation/physics_wave_curriculum_yaw_sea_states.yaml`
+evaluates the completed yaw-aware PPO against PID, SMC and NMPC on the figure-eight,
+square and circle, with three paired disturbance repetitions per sea state
+(seeds 42, 43, 44). This gives 108 simulations of 100 s each.
+
+It reproduces the historical evaluation parameters in `configs/evaluation/ocean.yaml`,
+renaming the old `severe` case to `rough`. These names are experimental labels,
+not standardized sea-state classifications. Mechanics and the disturbance flags
+are inherited from the yaw-aware training run (corrected mechanics, normalized
+spectrum, both filters enabled, compatibility depth kernel and coupling).
+
+| Label | Hs (m) | Tp (s) | Gamma | Direction | Half-spread | Velocity scale | Velocity cap (m/s) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Calm | 1.25 | 7.03 | 1.5 | 0 degrees | 15 degrees | 0.25 | 0.14 |
+| Moderate | 2.50 | 8.00 | 3.3 | approximately 60 degrees | 25 degrees | 0.50 | 0.50 |
+| Rough | 4.50 | 8.00 | 3.3 | 135 degrees | 35 degrees | 0.80 | 0.80 |
+
+The scenarios also vary noise, empirical load gains and force/moment limits; this
+is a multi-parameter robustness comparison, not an isolated Hs ablation. All
+parameters are explicit in the evaluation YAML. Some conditions extend beyond
+the training parameter ranges (for example Calm's peak period and Rough's load
+gains), so the comparison is distinct from the original in-range target campaign.
+
+```bash
+bluerov evaluate \
+  --config configs/evaluation/physics_wave_curriculum_yaw_sea_states.yaml \
+  --output artifacts/evaluation/physics_wave_curriculum_yaw_sea_states
+
+bluerov plot \
+  --run artifacts/evaluation/physics_wave_curriculum_yaw_sea_states \
+  --plots rmse
+
+bluerov plot \
+  --run artifacts/evaluation/physics_wave_curriculum_yaw_sea_states \
+  --plots rmse --per-trajectory
+```
+
+The aggregate boxplot has three adjacent boxes per controller, with distinct
+hatches for the three seas. Each box uses nine run-level RMSE values (three
+trajectories times three repetitions). Per-trajectory boxplots use three values
+per box. Use `--suite article` or `--suite article_by_trajectory` to generate the
+remaining error, heading, CPU, energy and Pareto figures.
+
+### Focused post-training wave-seed diagnostic
+
+The current `physics_wave_curriculum_yaw_seed_robustness.yaml` evaluates only PPO,
+only in Moderate, on the training figure-eight, square, circle and star, using 20 wave seeds
+per trajectory (80 episodes). It does not rerun PID/SMC/NMPC or request all seas.
+Its purpose is to display one RMSE point per wave seed, with mean, population
+standard deviation and coefficient of variation, in the training diagnostics section.
+All four trajectory groups use a single shared RMSE axis in a 6.5 by 4.2 inch figure.
+The existing broader raw run supplies the three original Moderate trajectories.
+Only the missing star was evaluated in the incremental `physics_wave_curriculum_yaw_seed_star`
+run, using the same seeds. Other archived seas are excluded from this diagnostic.
+
+The wave seeds are in the upper uint32 range and were checked against archived
+curriculum-assessment seeds. Initial conditions, weights, and normalization stay
+fixed. This is environmental-seed robustness, not a replication over PPO training
+seeds or a guarantee of generalization. The comparison between controllers still
+uses its original three paired seeds and separate statistics.
+
+To reproduce just the restricted diagnostic in a new directory:
+
+```bash
+bluerov evaluate \
+  --config configs/evaluation/physics_wave_curriculum_yaw_seed_robustness.yaml \
+  --output artifacts/evaluation/physics_wave_curriculum_yaw_training_seed_validation
+```
+
+The star spatial illustration is likewise restricted to Moderate in
+`configs/evaluation/physics_wave_curriculum_yaw_star.yaml`. It is separate from
+all boxplot and Pareto aggregates. The main Pareto plot now averages across
+seas and trajectories to produce one point per controller; the separate sea
+summaries remain available in `pareto_summary_by_scenario.csv`.

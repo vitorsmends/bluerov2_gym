@@ -164,3 +164,33 @@ anterior intacto. Não permite mudar a física, a arquitetura ou a seed na retom
 Ajustes de avaliação/transição são permitidos; a política precisa ser reavaliada
 sob os novos critérios. Para avaliar o resultado v2, atualize training_run e os
 caminhos de modelo/normalizador no YAML de avaliação para esse novo diretório.
+
+### Rastreamento de yaw
+
+O perfil `configs/training/trajectory_curriculum.yaml` adiciona ao reward histórico
+`-weight * abs(wrap(yaw - yaw_ref))`, com erro em radianos e `weight: 0.5`.
+Configure em `environment.yaw_tracking`:
+
+```yaml
+yaw_tracking:
+  weight: 0.5
+  relative_observation: true
+```
+
+O canal `yaw` passa a conter o erro angular em `[-pi, pi]`; os demais canais
+mantêm a convenção histórica. No reset deste perfil, os canais de rastreamento
+já recebem a mesma transformação usada nos passos e na avaliação.
+Sem essa seção, o comportamento histórico é preservado. Para treinar sem
+penalização mantendo o feedback relativo, use `weight: 0.0`.
+
+Esta alteração exige um novo treinamento e uma nova pasta de saída; não retome
+checkpoints com observações absolutas. Não altera a física nem os distúrbios.
+O painel HTML mostra média absoluta e RMSE de yaw em graus por rollout, gravados
+no TensorBoard como `rollout/yaw_error_mean_deg` e `rollout/yaw_error_rmse_deg`.
+Logs antigos sem esses campos não permitem reconstruir essa curva.
+
+Ao avaliar, `environment.training_run` herda automaticamente o adaptador
+`legacy_yaw_error` do treino. Sem `training_run`, selecione explicitamente esse
+adaptador nos parâmetros do controlador PPO. Modelos históricos continuam usando
+`legacy`. Os critérios de promoção do currículo continuam baseados em posição;
+a penalização de yaw faz parte da otimização, mas não é um novo critério de promoção.

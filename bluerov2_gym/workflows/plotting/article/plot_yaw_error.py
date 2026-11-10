@@ -17,26 +17,31 @@ def main(settings=None):
     output.mkdir(parents=True, exist_ok=True)
     tables.mkdir(parents=True, exist_ok=True)
     scenarios = {k: Path(v) for k, v in settings.get('scenarios', defaults.SCENARIOS).items()}
+    if settings.get('pool_scenarios', False):
+        panels = [('All sea states', list(scenarios.values()))]
+    else:
+        panels = [(scenario, [folder]) for scenario, folder in scenarios.items()]
     selected = {c.lower() for c in settings.get('controllers', defaults.CONTROLLERS)}
     controllers = {k: v for k, v in defaults.CONTROLLERS.items() if k.lower() in selected}
     exported = []
     with plt.rc_context({'font.family': 'serif', 'font.size': 12, 'pdf.fonttype': 42}):
-        fig, axes = plt.subplots(len(scenarios), 1,
-                                 figsize=(defaults.FIGSIZE[0], defaults.FIGSIZE[1]*len(scenarios)),
+        fig, axes = plt.subplots(len(panels), 1,
+                                 figsize=(defaults.FIGSIZE[0], defaults.FIGSIZE[1]*len(panels)),
                                  sharex=True, sharey=True, squeeze=False)
-        for ax, (scenario, folder) in zip(axes[:, 0], scenarios.items()):
+        for ax, (scenario, folders) in zip(axes[:, 0], panels):
             for controller, info in controllers.items():
                 runs = []
-                for path, repetition, df in iter_csv_runs(
-                        folder, info['prefix'], {'time', 'yaw_error'},
-                        trajectories=settings.get('trajectory_names')):
-                    run = df[['time', 'yaw_error']].copy()
-                    angle = run['yaw_error'].to_numpy(dtype=float)
-                    # Magnitudes cannot cancel across positive/negative errors;
-                    # wrap first so +/-pi crossings never appear as 360 degrees.
-                    run['yaw_error'] = np.degrees(np.abs(np.arctan2(np.sin(angle), np.cos(angle))))
-                    run.attrs['run_id'] = f'{path.stem}_rep{repetition}'
-                    runs.append(run)
+                for folder in folders:
+                    for path, repetition, df in iter_csv_runs(
+                            folder, info['prefix'], {'time', 'yaw_error'},
+                            trajectories=settings.get('trajectory_names')):
+                        run = df[['time', 'yaw_error']].copy()
+                        angle = run['yaw_error'].to_numpy(dtype=float)
+                        # Magnitudes cannot cancel across positive/negative errors;
+                        # wrap first so +/-pi crossings never appear as 360 degrees.
+                        run['yaw_error'] = np.degrees(np.abs(np.arctan2(np.sin(angle), np.cos(angle))))
+                        run.attrs['run_id'] = f'{path.stem}_rep{repetition}'
+                        runs.append(run)
                 result = aggregate_runs(runs, column='yaw_error')
                 if result is None:
                     continue
@@ -57,7 +62,7 @@ def main(settings=None):
         handles, labels = axes[0, 0].get_legend_handles_labels()
         fig.legend(handles, labels, loc='upper center', ncol=max(1, len(labels)),
                    frameon=True, bbox_to_anchor=(.5, .995))
-        fig.tight_layout(rect=(0, 0, 1, .90 if len(scenarios) == 1 else .95))
+        fig.tight_layout(rect=(0, 0, 1, .90 if len(panels) == 1 else .95))
         for extension in ['png', 'pdf']:
             fig.savefig(output/f'yaw_error_mean_std.{extension}', dpi=defaults.DPI, bbox_inches='tight')
         plt.close(fig)

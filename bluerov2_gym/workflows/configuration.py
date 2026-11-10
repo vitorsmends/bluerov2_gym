@@ -46,6 +46,10 @@ def resolve(path):
             raise ValueError('Evaluation environment config differs from training_run.')
         inherited['training_run'] = str(run)
         config['environment'] = inherited
+        if trained.get('yaw_tracking', {}).get('relative_observation', False):
+            for controller in config.get('controllers', []):
+                if controller.get('name') == 'ppo':
+                    controller.setdefault('params', {})['observation_adapter'] = 'legacy_yaw_error'
     disturbance = config.get('disturbance', {})
     if disturbance.get('config_path'):
         external = read_yaml(absolute(disturbance.pop('config_path')))

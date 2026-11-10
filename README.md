@@ -650,3 +650,51 @@ O modo `goal_frame` é um experimento explícito: ele também muda o objetivo de
 e não é uma correção retrocompatível comprovada de uma política já treinada.
 Veja a [auditoria estática da validação](docs/validation_audit_0436.md) e a
 [derivação dos adaptadores](docs/ppo_observation_convention.md).
+
+O currículo de trajetórias também penaliza yaw (`environment.yaw_tracking.weight:
+0.5`, erro em radianos) e fornece erro angular relativo ao PPO. O painel no
+navegador inclui média absoluta e RMSE de yaw em graus. Inicie um treino novo
+para usar esse feedback; veja [a configuração de yaw](docs/trajectory_curriculum.md#rastreamento-de-yaw).
+
+```bash
+bluerov train --config configs/training/trajectory_curriculum.yaml \
+  --output artifacts/training/physics_wave_curriculum_yaw
+
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/physics_wave_curriculum_yaw
+```
+
+### Validar em três mares e gerar boxplots agrupados
+
+O perfil `configs/evaluation/physics_wave_curriculum_yaw_sea_states.yaml` usa o
+PPO mais recente com yaw, PID, SMC e NMPC, nas trajetórias oito, quadrado e círculo.
+São três repetições em cada um dos cenários históricos Calm, Moderate e Rough:
+108 simulações. Os parâmetros e as unidades de agregação estão em
+[docs/evaluation.md](docs/evaluation.md#three-sea-states-calm-moderate-and-rough).
+
+```bash
+bluerov evaluate \
+  --config configs/evaluation/physics_wave_curriculum_yaw_sea_states.yaml \
+  --output artifacts/evaluation/physics_wave_curriculum_yaw_sea_states
+
+bluerov plot \
+  --run artifacts/evaluation/physics_wave_curriculum_yaw_sea_states \
+  --plots rmse
+
+bluerov plot \
+  --run artifacts/evaluation/physics_wave_curriculum_yaw_sea_states \
+  --plots rmse --per-trajectory
+```
+
+Cada controlador terá três caixas, identificadas por hachuras e pela legenda.
+
+O diagnóstico adicional de seeds foi separado da comparação: o perfil
+`configs/evaluation/physics_wave_curriculum_yaw_seed_robustness.yaml` agora usa
+somente PPO, oito, quadrado, círculo e estrela em Moderate, com 20 seeds de ondas
+por trajetória (80 episódios).
+Pontos de RMSE por seed, média e desvio-padrão aparecem em um único painel, com
+quatro grupos de trajetórias, na seção de diagnóstico do treino,
+sem entrar nos boxplots ou Pareto dos controladores. O Pareto principal agora
+mostra um ponto médio por controlador. A configuração da estrela usa Moderate
+somente, para a ilustração espacial. Consulte os detalhes em
+[docs/evaluation.md](docs/evaluation.md#focused-post-training-wave-seed-diagnostic).

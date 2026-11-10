@@ -19,6 +19,8 @@ TAGS = {
     'reward_step': 'rollout/reward_mean_per_step',
     'error': 'rollout/position_error_mean_m',
     'rmse': 'rollout/position_error_rmse_m',
+    'yaw': 'rollout/yaw_error_mean_deg',
+    'yaw_rmse': 'rollout/yaw_error_rmse_deg',
 }
 
 

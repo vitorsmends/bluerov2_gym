@@ -6,12 +6,15 @@ reference:
   commit: 889a766e4615098659a2f923782a1a56f921edd3
   path: experiments_traj/train_ppo.py
   sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
-  scope: PPO/reset/feedback/reward 889a766; std pretraining then corrected mechanics
+  scope: PPO 889a766 with optional relative-yaw feedback and penalty; std pretraining then corrected mechanics
     and Hs-normalized waves.
   implementation: Unmodified historical source plus current simulator constructor
-    and logging-only info aliases.
+    logging aliases and configurable yaw feedback/reward.
 environment:
   id: BlueRov-v0
+  yaw_tracking:
+    weight: 0.5  # penalty = weight * absolute wrapped yaw error (radians)
+    relative_observation: true
   max_episode_steps: null
   render_mode: null
   config:
