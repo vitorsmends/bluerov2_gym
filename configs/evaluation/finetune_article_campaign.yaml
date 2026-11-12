@@ -1,0 +1,16 @@
+# Relative paths are resolved from this file. Existing article results remain intact.
+source_training: ../../artifacts/training/physics_wave_curriculum_yaw
+finetuned_training: ../../artifacts/training/trajectory_star_finetune
+baseline: ../../artifacts/evaluation/physics_wave_curriculum_yaw_sea_states
+baseline_star: ../../artifacts/evaluation/physics_wave_curriculum_yaw_star
+output: ../../artifacts/evaluation/finetune_article_campaign
+checkpoint_comparison:
+  scenario: moderate
+  seed: 42
+  trajectories: [reference_889_figure_eight, square, circle, star]
+# Comparison uses one paired realization; multi-seed assessment is separate.
+seed_assessment:
+  scenario: moderate
+  first_seed: 3000000000
+  repetitions: 20
+  trajectories: [reference_889_figure_eight, square, circle, star]

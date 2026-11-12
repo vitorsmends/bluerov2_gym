@@ -26,6 +26,12 @@ def resolve(path):
     def absolute(value):
         value = Path(value).expanduser()
         return str(value.resolve() if value.is_absolute() else (path.parent/value).resolve())
+    if config.get('training', {}).get('task') == 'trajectory_finetune':
+        source = Path(absolute(config['finetuning']['source_run']))
+        inherited = read_yaml(source/'config.resolved.yaml')
+        config = merge({key: inherited[key] for key in ['environment', 'ppo', 'vecnormalize', 'reference']
+                        if key in inherited}, config)
+        config['finetuning']['source_run'] = str(source)
     environment = config.setdefault('environment', {})
     for key in ['dynamics_config_file', 'env_config_file']:
         if environment.get(key):

@@ -1,0 +1,99 @@
+# Square-only warm-start of the original article checkpoint; no mixed trajectory training.
+finetuning:
+  source_run: ../../artifacts/training/physics_wave_curriculum_yaw
+  checkpoint_suffix: ''
+  episode_seconds: 100.0
+  assess_source: true
+  trajectory:
+    name: square
+    params:
+      side: 1.6
+      depth: -0.6
+      period: 80.0
+  corner_reset:
+    probability: 0.75
+    seconds_before_corner:
+    - 1.0
+    - 5.0
+paths:
+  tensorboard_log: ../../artifacts/logs/tensorboard
+  model_dir: ../../artifacts/models/trajectory_finetune
+  model_name: ppo_trajectory_finetuned
+  vecnormalize_name: vec_normalize_trajectory_finetuned.pkl
+training:
+  task: trajectory_finetune
+  device: auto
+  seed: 4242
+  phase_planned_timesteps: 1000000
+  tb_log_name: PPO_SquareFineTune
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_finetune_checkpoint
+  save_vecnormalize: true
+evaluation:
+  every_timesteps: 20000
+  duration_seconds: 100.0
+  settling_time_seconds: 10.0
+  episodes: 8
+  groups: 2
+  seed: 810042
+  corner_window_seconds: 3.0
+curriculum_transition:
+  mode: success
+  position_tolerance_m: 0.2
+  min_tracking_fraction: 0.9
+  max_rmse_m: 0.15
+  max_yaw_mae_deg: 12.0
+  max_corner_rmse_m: 0.3
+  min_batch_success_rate: 0.9
+  min_group_success_rate: 0.9
+  consecutive_batches: 3
+rehearsal:
+  probability: 0.3
+plateau_early_stopping:
+  enabled: true
+  patience_evaluations: 20
+  warmup_evaluations: 5
+  min_delta_m: 0.005
+curriculum:
+- name: FT1 - somente quadrado, ondas leves
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 0.2
+    - 0.5
+    Tp:
+    - 10.0
+    - 12.0
+    wave_direction_deg:
+    - 0.0
+    - 360.0
+    directional_spread_deg:
+    - 15.0
+    - 25.0
+- name: FT2 - somente quadrado, ondas alvo
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+  jonswap: {}
+  ranges:
+    Hs:
+    - 0.5
+    - 4.5
+    Tp:
+    - 8.0
+    - 12.0
+    wave_direction_deg:
+    - 0.0
+    - 360.0
+    directional_spread_deg:
+    - 20.0
+    - 35.0
+    gamma:
+    - 3.3
+    - 5.0

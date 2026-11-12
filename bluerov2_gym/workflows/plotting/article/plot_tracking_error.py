@@ -24,7 +24,7 @@ def configure(settings=None):
     OUTPUT_DIR = Path(settings.get('output_dir', defaults.OUTPUT_DIR))
     TABLE_DIR = Path(settings.get('table_dir', defaults.TABLE_DIR))
     SCENARIOS = {k: Path(v) for k,v in settings.get('scenarios', defaults.SCENARIOS).items()}
-    CONTROLLERS = defaults.CONTROLLERS
+    CONTROLLERS = settings.get("controller_definitions", defaults.CONTROLLERS)
     if settings.get('controllers') is not None:
         selected = {v.lower() for v in settings['controllers']}
         CONTROLLERS = {k:v for k,v in CONTROLLERS.items() if k.lower() in selected}

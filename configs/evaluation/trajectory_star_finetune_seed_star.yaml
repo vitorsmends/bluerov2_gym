@@ -1,0 +1,59 @@
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 20
+  seed: 3000000000
+  thrust_limit: 40.0
+  render_mode: null
+environment:
+  training_run: ../../artifacts/training/trajectory_star_finetune
+controllers:
+- name: ppo
+  enabled: true
+  params:
+    observation_adapter: legacy_yaw_error
+    model_path: ../../artifacts/training/trajectory_star_finetune/models/ppo_trajectory_finetuned.zip
+    vecnormalize_path: ../../artifacts/training/trajectory_star_finetune/models/vec_normalize_trajectory_finetuned.pkl
+    env_config_path: ../dynamics/blue_rov_config.yaml
+    dynamics_config_path: ../dynamics/dynamics_config.yaml
+disturbance:
+  default_scenario: moderate
+  scenario_names:
+  - moderate
+  scenarios:
+    moderate:
+      Hs: 2.5
+      Tp: 8.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.5
+      - 0.866
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.5
+      alpha_wave: 0.02
+      noise_std: 0.01
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 3000000000
+trajectories:
+- name: star
+  enabled: true
+  params: {}

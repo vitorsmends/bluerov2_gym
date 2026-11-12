@@ -698,3 +698,18 @@ sem entrar nos boxplots ou Pareto dos controladores. O Pareto principal agora
 mostra um ponto médio por controlador. A configuração da estrela usa Moderate
 somente, para a ilustração espacial. Consulte os detalhes em
 [docs/evaluation.md](docs/evaluation.md#focused-post-training-wave-seed-diagnostic).
+
+## Comparação dos checkpoints e avaliação após fine-tuning na estrela
+
+Depois que o fine-tuning terminar, gere a comparação das quatro políticas, os
+novos CSVs PPO, a avaliação de seeds e as figuras para revisão no artigo:
+
+```bash
+python -m bluerov2_gym.workflows.evaluation.finetune_campaign --phase all
+```
+
+O fluxo reutiliza os resultados salvos de PID, SMC e NMPC após conferir sua
+compatibilidade; o artigo atual permanece intacto. As figuras novas ficam em
+`artifacts/evaluation/finetune_article_campaign/article_candidate/`.
+Para executar cada etapa separadamente e entender a comparação dos modelos, veja
+[docs/finetune_evaluation.md](docs/finetune_evaluation.md).

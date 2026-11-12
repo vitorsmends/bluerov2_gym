@@ -71,10 +71,10 @@ def train(args):
     if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
     task=config.get('training',{}).get('task','stationkeeping_curriculum')
     if args.resume_run is not None:
-        if task != 'trajectory_curriculum' or args.seeds:
+        if task not in {'trajectory_curriculum', 'trajectory_finetune'} or args.seeds:
             raise ValueError('--resume-run supports one physics/wave curriculum run, without --seeds.')
         config['training']['resume_run'] = str(args.resume_run.expanduser().resolve())
-    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum','trajectory_tracking','trajectory_curriculum','trajectory_curriculum_legacy'}:
+    if task not in {'stationkeeping_curriculum','stationkeeping_no_curriculum','trajectory_tracking','trajectory_curriculum','trajectory_curriculum_legacy','trajectory_finetune'}:
         raise ValueError(f'Unknown training task: {task}')
     if task!='stationkeeping_curriculum' and args.ablation:
         raise ValueError('Curriculum ablations require stationkeeping_curriculum.')
@@ -92,7 +92,7 @@ def train(args):
                 if task=='trajectory_curriculum_legacy':
                     from .training.trajectory_curriculum_legacy import train_trajectory_curriculum
                     train_trajectory_curriculum(config)
-                elif task=='trajectory_curriculum':
+                elif task in {'trajectory_curriculum', 'trajectory_finetune'}:
                     from .training.trajectory_curriculum import train_trajectory_curriculum
                     train_trajectory_curriculum(config)
                 elif task=='trajectory_tracking':

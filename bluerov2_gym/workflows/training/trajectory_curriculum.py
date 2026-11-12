@@ -46,6 +46,9 @@ def isolated_random_state():
 
 
 def validate_config(config):
+    if config['training'].get('task') == 'trajectory_finetune':
+        from .finetune_polygon import validate_finetuning
+        validate_finetuning(config)
     stages, settings = config.get('curriculum', []), config['curriculum_transition']
     evaluation = config['evaluation']
     if not stages or settings.get('mode') != 'success':
@@ -119,6 +122,13 @@ def batch_result(episodes, settings):
                 episodes=episodes)
 
 
+def curriculum_env(config, seed):
+    if config['training'].get('task') == 'trajectory_finetune':
+        from .finetune_polygon import FineTuningEnv
+        return FineTuningEnv(config, seed)
+    return PhysicsCurriculumEnv(config, seed)
+
+
 def evaluate_stage(model, normalizer, config, index, batch_index):
     """Fresh validation contexts; never step/update the training VecNormalize."""
     evaluation, settings = phase_settings(config, index)
@@ -134,7 +144,7 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
     # A SeedSequence avoids ad-hoc overlap between phase/batch streams.
     rng = np.random.default_rng(np.random.SeedSequence([evaluation['seed'], index, batch_index]))
     with isolated_random_state():
-        env = PhysicsCurriculumEnv(config, context_seed=0)
+        env = curriculum_env(config, 0)
         env.set_stage(index)
         try:
             for episode in range(evaluation['episodes']):
@@ -144,13 +154,21 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                 context['jonswap']['seed'] = wave_seed
                 reset_seed = int(rng.integers(2**31, 2**32))
                 np.random.seed(reset_seed)
-                obs, _ = env.reset(seed=reset_seed, options={'curriculum_context': context})
+                options = {'curriculum_context': context}
+                if config['training'].get('task') == 'trajectory_finetune':
+                    options['assessment'] = True
+                obs, _ = env.reset(seed=reset_seed, options=options)
                 errors, rewards, saturated = [], [], []
+                yaw_errors, corner_errors = [], []
                 terminated = truncated = False
                 for _ in range(horizon):
                     action, _ = model.predict(frozen.normalize_obs(obs), deterministic=True)
                     obs, reward, terminated, truncated, info = env.step(action)
                     errors.append(info['tracking_error_m'])
+                    if len(errors) > settling:
+                        yaw_errors.append(info.get('metrics/yaw_error_abs_deg', float('nan')))
+                        if info.get('finetune/corner_window', False):
+                            corner_errors.append(errors[-1])
                     rewards.append(reward)
                     saturated.append(float(np.mean(np.abs(action) >= 39.999)))
                     if terminated or truncated or not math.isfinite(errors[-1]):
@@ -160,6 +178,16 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                               mean_reward_raw=float(np.mean(rewards))
                               if np.all(np.isfinite(rewards)) else None,
                               thruster_saturation_fraction=float(np.mean(saturated)))
+                if config['training'].get('task') == 'trajectory_finetune':
+                    yaw_mae = float(np.mean(yaw_errors)) if yaw_errors else float('inf')
+                    corner_rmse = float(np.sqrt(np.mean(np.square(corner_errors)))) if corner_errors else None
+                    corner_ok = (env.trajectory_name not in {'square', 'star'} or
+                                 (corner_rmse is not None and corner_rmse <= settings['max_corner_rmse_m']))
+                    result.update(trajectory=env.trajectory_name, sea_group=group,
+                                  group=f'{group}:{env.trajectory_name}', yaw_mae_deg=yaw_mae,
+                                  corner_rmse_m=corner_rmse)
+                    result['success'] = bool(result['success'] and np.isfinite(yaw_mae) and
+                                             yaw_mae <= settings['max_yaw_mae_deg'] and corner_ok)
                 episodes.append(result)
         finally:
             env.close()
@@ -197,6 +225,10 @@ class ContinuousMetrics(PositionErrorCallback):
 def train_trajectory_curriculum(config):
     validate_config(config)
     resume = load_resume(config)
+    warm_start = None
+    if config['training'].get('task') == 'trajectory_finetune' and resume is None:
+        from .finetune_polygon import source_pair
+        warm_start = source_pair(config)
     paths, settings = config['paths'], config['curriculum_transition']
     models = Path(paths['model_dir'])
     models.mkdir(parents=True, exist_ok=True)
@@ -204,9 +236,10 @@ def train_trajectory_curriculum(config):
     logs.mkdir(parents=True, exist_ok=True)
     status_path = models / 'curriculum_status.yaml'
     seed = config['training'].get('seed')
-    raw_env = DummyVecEnv([lambda: Monitor(PhysicsCurriculumEnv(config, seed),
+    raw_env = DummyVecEnv([lambda: Monitor(curriculum_env(config, seed),
                           info_keywords=('is_success', 'tracking_error_m'))])
-    env = (VecNormalize.load(resume['normalizer'], raw_env) if resume else
+    initial = resume or warm_start
+    env = (VecNormalize.load(initial['normalizer'], raw_env) if initial else
            VecNormalize(raw_env, **config['vecnormalize']))
     env.training, env.norm_reward = True, config['vecnormalize'].get('norm_reward', True)
     base = env.venv.envs[0].unwrapped
@@ -252,18 +285,36 @@ def train_trajectory_curriculum(config):
             model.tensorboard_log = paths['tensorboard_log']
             restore_rng(resume['state'], base)
             print(f"Resuming {resume['model']} at {model.num_timesteps} steps; fresh episode, same optimizer/normalizer.", flush=True)
+        elif warm_start:
+            model = PPO.load(warm_start['model'], env=env, device=device, force_reset=True, seed=seed)
+            model.tensorboard_log = paths['tensorboard_log']
+            pretrained_timesteps = model.num_timesteps
+            model.num_timesteps = 0  # Fine-tuning logs count additional interactions only.
+            print(f'Fine-tuning {warm_start["model"]}; optimizer and normalization retained.', flush=True)
         else:
             model = PPO(policy, env, seed=seed, device=device,
                         tensorboard_log=paths['tensorboard_log'], **params)
-        metadata = dict(config=config, task='trajectory_curriculum', execution_device=device,
+        metadata = dict(config=config, task=config['training']['task'], execution_device=device,
                         observation_adapter=('legacy_yaw_error' if base.yaw_feedback else 'legacy'), policy_kwargs=model.policy_kwargs,
-                        policy_architecture=str(model.policy), effective_episode_limit=None)
+                        policy_architecture=str(model.policy),
+                        effective_episode_limit=getattr(base, 'episode_steps', None))
+        if warm_start:
+            metadata.update(initialization=warm_start, pretrained_timesteps=pretrained_timesteps)
+            write_yaml(models / 'initialization.yaml', dict(warm_start, pretrained_timesteps=pretrained_timesteps))
         write_yaml(metadata_path, metadata)
         checkpoint = config['checkpoint']
         metrics = ContinuousMetrics()
         callbacks = [CheckpointCallback(save_freq=checkpoint['save_freq'], save_path=str(models),
                      name_prefix=checkpoint['name_prefix'], save_vecnormalize=True),
                      TensorboardCallback(), metrics]
+        if config['training'].get('task') == 'trajectory_finetune':
+            from .finetune_polygon import PolygonMetrics
+            callbacks.append(PolygonMetrics())
+        if warm_start and config['finetuning'].get('assess_source', True):
+            for source_stage in range(len(config['curriculum'])):
+                print(f'[FINETUNE] Assessing source policy, phase {source_stage+1}.', flush=True)
+                source_result = evaluate_stage(model, env, config, source_stage, 0)
+                write_yaml(logs / f'source_baseline_stage_{source_stage+1}.yaml', source_result)
         rollout = int(config['ppo']['n_steps'])
         first_learn = resume is None
         for index, stage in enumerate(config['curriculum']):

@@ -1,0 +1,25 @@
+# Evaluate the terminal star policy selected by configured early stopping.
+source_training: ../../artifacts/training/physics_wave_curriculum_yaw
+finetuned_training: ../../artifacts/training/trajectory_star_finetune
+baseline: ../../artifacts/evaluation/physics_wave_curriculum_yaw_sea_states
+baseline_star: ../../artifacts/evaluation/physics_wave_curriculum_yaw_star
+output: ../../artifacts/evaluation/star_finetune_validation
+checkpoint_comparison:
+  scenario: moderate
+  seed: 42
+  trajectories:
+  - reference_889_figure_eight
+  - square
+  - circle
+  - star
+seed_assessment:
+  scenario: moderate
+  first_seed: 3000000000
+  repetitions: 20
+  trajectories:
+  - reference_889_figure_eight
+  - square
+  - circle
+  - star
+allow_early_stopped_finetune: true
+finetuned_checkpoint_suffix: _incomplete

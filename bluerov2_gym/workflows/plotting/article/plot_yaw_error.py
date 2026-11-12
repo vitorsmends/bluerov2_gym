@@ -21,8 +21,9 @@ def main(settings=None):
         panels = [('All sea states', list(scenarios.values()))]
     else:
         panels = [(scenario, [folder]) for scenario, folder in scenarios.items()]
-    selected = {c.lower() for c in settings.get('controllers', defaults.CONTROLLERS)}
-    controllers = {k: v for k, v in defaults.CONTROLLERS.items() if k.lower() in selected}
+    definitions = settings.get('controller_definitions', defaults.CONTROLLERS)
+    selected = {c.lower() for c in settings.get('controllers', definitions)}
+    controllers = {k: v for k, v in definitions.items() if k.lower() in selected}
     exported = []
     with plt.rc_context({'font.family': 'serif', 'font.size': 12, 'pdf.fonttype': 42}):
         fig, axes = plt.subplots(len(panels), 1,
