@@ -57,6 +57,8 @@ class ControllerFactory:
 
         # PPO does not require the vehicle dynamics or the reference provider.
         if key == "ppo":
+            if params.get('action_control', {}).get('mode') == 'body_wrench':
+                params['allocation_dynamics'] = dynamics
             return controller_cls(**params)
 
         return controller_cls(

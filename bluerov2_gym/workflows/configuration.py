@@ -26,7 +26,9 @@ def resolve(path):
     def absolute(value):
         value = Path(value).expanduser()
         return str(value.resolve() if value.is_absolute() else (path.parent/value).resolve())
-    if config.get('training', {}).get('task') == 'trajectory_finetune':
+    if (config.get('training', {}).get('task') == 'trajectory_finetune'
+            or (config.get('training', {}).get('task') == 'trajectory_curriculum'
+                and config.get('finetuning'))):
         source = Path(absolute(config['finetuning']['source_run']))
         inherited = read_yaml(source/'config.resolved.yaml')
         config = merge({key: inherited[key] for key in ['environment', 'ppo', 'vecnormalize', 'reference']
@@ -52,6 +54,14 @@ def resolve(path):
             raise ValueError('Evaluation environment config differs from training_run.')
         inherited['training_run'] = str(run)
         config['environment'] = inherited
+        if trained.get('action_control'):
+            for controller in config.get('controllers', []):
+                if controller.get('name') == 'ppo':
+                    params = controller.setdefault('params', {})
+                    if ('action_control' in params and
+                            params['action_control'] != trained['action_control']):
+                        raise ValueError('Evaluation action_control differs from training.')
+                    params['action_control'] = deepcopy(trained['action_control'])
         if trained.get('yaw_tracking', {}).get('relative_observation', False):
             for controller in config.get('controllers', []):
                 if controller.get('name') == 'ppo':

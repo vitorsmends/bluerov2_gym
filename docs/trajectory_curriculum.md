@@ -1,11 +1,13 @@
+> A receita descrita abaixo é a anterior ao perfil Walker, preservada em `configs/training/trajectory_curriculum_pre_walker.yaml`. O padrão atual está em [Curriculum Walker](trajectory_curriculum_walker.md).
+
 # Currículo de mecânica e ondas
 
-Perfil padrão de currículo de trajetórias: configs/training/trajectory_curriculum.yaml.
+Receita histórica do artigo: configs/training/trajectory_curriculum_pre_walker.yaml.
 Executa a receita PPO e a figura oito de 889a766. O modo anterior foi preservado
 em trajectory_curriculum_legacy.yaml e trajectory_curriculum_legacy.py.
 
 ```bash
-bluerov train --config configs/training/trajectory_curriculum.yaml \
+bluerov train --config configs/training/trajectory_curriculum_pre_walker.yaml \
   --output artifacts/training/physics_wave_curriculum
 ```
 
@@ -154,7 +156,7 @@ Interrompa o treino antigo com Ctrl+C e aguarde o checkpoint _interrupted termin
 de ser salvo. Depois execute com os critérios atualizados:
 
 ```bash
-bluerov train --config configs/training/trajectory_curriculum.yaml \
+bluerov train --config configs/training/trajectory_curriculum_pre_walker.yaml \
   --resume-run artifacts/training/physics_wave_curriculum \
   --output artifacts/training/physics_wave_curriculum_v2
 ```

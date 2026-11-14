@@ -19,8 +19,15 @@ def training_phase(config, step, runtime=None):
         if runtime.get('mode') == 'physics_wave_success':
             label += (f' — validações aprovadas: {runtime.get("successful_batches", 0)}/'
                       f'{runtime.get("required_batches", 3)}')
+            window = runtime.get('last_evaluation', {}).get('mastery_window')
+            if window:
+                label += f' — janela: {window["batches"]}/{window["required_batches"]} avaliações'
+                if 'success_rate' in window:
+                    label += f' (sucesso {window["success_rate"]:.1%})'
             context = runtime.get('effective_context') or {}
             sea = merge(sea, context.get('jonswap', {}))
+            if context.get('sea_case'):
+                label += f' — {context["sea_case"]}'
             label += f' — mecânica: {runtime.get("mechanics_model", "?")}'
             if context and context.get('stage_index', index-1) != index-1:
                 label += f' — revisão: {context["name"]}'
@@ -74,7 +81,9 @@ def training_phase(config, step, runtime=None):
     details = []
     for key, name, unit in [('Hs', 'Hs', 'm'), ('Tp', 'Tp', 's'),
                             ('max_current', 'Limite de velocidade da água', 'm/s')]:
-        if key in sea:
+        if key == 'max_current' and sea.get(key, 0) >= 1e5:
+            details.append('Velocidade da água sem saturação ativa')
+        elif key in sea:
             details.append(f'{name}={sea[key]:g} {unit}')
     if 'scale' in sea:
         details.append(f'escala={sea["scale"]:g}')

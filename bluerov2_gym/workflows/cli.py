@@ -70,6 +70,11 @@ def train(args):
         config.setdefault('training', {})['device'] = args.device
     if len(set(seeds))!=len(seeds) or any(seed is not None and seed<0 for seed in seeds):raise ValueError('Seeds must be unique and non-negative.')
     task=config.get('training',{}).get('task','stationkeeping_curriculum')
+    action_mode = getattr(args, 'action_control', None)
+    if action_mode is not None:
+        if task != 'trajectory_curriculum':
+            raise ValueError('--action-control currently supports trajectory_curriculum only.')
+        config.setdefault('environment', {}).setdefault('action_control', {})['mode'] = action_mode
     if args.resume_run is not None:
         if task not in {'trajectory_curriculum', 'trajectory_finetune'} or args.seeds:
             raise ValueError('--resume-run supports one physics/wave curriculum run, without --seeds.')
@@ -152,6 +157,8 @@ def main(argv=None):
             p.add_argument('--seeds',type=int,nargs='+')
             p.add_argument('--ablation')
             p.add_argument('--device', choices=['auto', 'cpu', 'cuda'], default=None)
+            p.add_argument('--action-control', choices=['thrusters', 'body_wrench'], default=None,
+                           help='Override the physics/wave curriculum policy action interface.')
             p.add_argument('--resume-run', type=Path, help='Continue a stopped physics/wave curriculum in a new output directory.')
     for name in ['plot','plot-training']:
         p=commands.add_parser(name)

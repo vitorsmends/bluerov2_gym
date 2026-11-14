@@ -210,38 +210,91 @@ está em [Treinamento de trajetória de referência](docs/trajectory_training_re
 O currículo segue disponível como padrão **para station keeping**, assim como
 o experimento sem currículo. Eles não são substitutos deste treino de trajetória.
 
-## Currículo de mecânica e ondas para trajetórias
+## Treinar o currículo progressivo do zero em outro computador
 
-O perfil `trajectory_curriculum.yaml` treina a figura oito de `889a766` em seis
-fases: std sem ondas; std da `train_stable_traj`; física corrigida com quatro
-níveis crescentes de mar. Preserva rede 64/64, feedback, recompensa, política,
-otimizador e normalização. Nos quatro níveis finais, Hs controla a energia do
-espectro por normalização explícita; os filtros históricos são mantidos.
+A configuração portátil contém as 16 fases, ações com alocação conhecida,
+avanço por uma janela de três avaliações e early stopping por ausência de
+progresso em sucesso global, pior caso e RMSE. Não carrega checkpoints locais.
 
 ```bash
-bluerov train --config configs/training/trajectory_curriculum.yaml \
-  --output artifacts/training/physics_wave_curriculum
+bash scripts/setup.sh
+source .venv-ppo-reference/bin/activate
+bluerov train --config configs/training/progressive_wave_height.yaml \
+  --output artifacts/training/progressive_wave_height
 ```
 
-São **3 milhões de passos planejados por fase**, sem teto rígido nem avanço
-por orçamento. As fases terminam por domínio em avaliações independentes de
-100 s, com o normalizador congelado. O treino preserva a ausência de TimeLimit
-histórica. O treino completo pode usar menos ou mais que 18 milhões de passos.
-
-Em outro terminal, acompanhe no navegador:
+Em outro terminal, após ativar o mesmo ambiente:
 
 ```bash
 python -m bluerov2_gym.workflows.plotting.training.browser \
-  --run artifacts/training/physics_wave_curriculum
+  --run artifacts/training/progressive_wave_height \
+  --host 0.0.0.0 --port 51342 --no-open
 ```
 
-O painel mostra fase/mecânica, mar efetivamente amostrado, avaliações aprovadas,
-passos e estimativa de tempo até a referência de planejamento. Essa estimativa
-não é uma previsão de quando o agente dominará a fase.
+O painel estará em `http://localhost:51342`; pela rede, substitua `localhost`
+pelo IP do computador que treina. Use uma pasta de saída nova em cada execução.
 
-O currículo anterior com rotação de trajetórias permanece separado em
-`configs/training/trajectory_curriculum_legacy.yaml`.
-Veja [critérios, fases e avaliação](docs/trajectory_curriculum.md).
+## WalkerRamp: treinamento experimental com alocação conhecida
+
+O novo perfil começa do zero na dinâmica simplificada, sem ondas, introduz
+W1–W3 fracos e aumenta Hs em fases curtas na mecânica de validação. Não usa
+filtros temporais. A opção `body_wrench` faz o PPO comandar forças/momentos
+resultantes no corpo e usa a matriz conhecida para calcular as forças dos
+propulsores. Os treinamentos anteriores mantêm sua interface original.
+
+```bash
+bluerov train --config configs/training/walker_ramp.yaml \
+  --output artifacts/training/walker_ramp
+
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/walker_ramp --host 0.0.0.0 --port 51342 --no-open
+```
+
+Para comparar com seis comandos diretos, use `--action-control thrusters` e
+outra pasta de saída. Consulte [fases, critérios e alocação](docs/walker_ramp.md).
+
+## Currículo de mecânica e ondas para trajetórias
+
+O padrão `trajectory_curriculum.yaml` usa uma ponte com filtro antes de
+chegar aos casos W1–W3 sem filtragem. A preparação **começa na dinâmica
+simplificada**, como no treinamento anterior do artigo. A arquitetura,
+recompensa e os hiperparâmetros do PPO são mantidos.
+
+| Fase | Mecânica e distúrbio |
+|---|---|
+| A | Simplificada, sem ondas; receita original |
+| B | Simplificada, mar filtrado de `train_stable_traj`; receita original |
+| C | Mecânica de validação, mar baixo filtrado; antiga C1 do artigo |
+| D | Mecânica de validação, configuração Walker com Hs de 0,2–0,5 m e filtro |
+| E | Mistura W1–W3 com filtro, α = 0,02 |
+| F | Mesmos casos, filtro reduzido, α = 0,1 |
+| G | Mesmos casos, filtro reduzido, α = 0,4 |
+| H | Mesmos casos, filtro desligado |
+
+A–C preservam o oito e a rampa original até −0,5 m. D–H usam oito a −5 m,
+profundidade de água de 54 m, kernel Airy e rotação para o corpo. Nessas fases,
+não há ruído gaussiano adicional nem saturação ativa da velocidade; ganhos e
+limites empíricos de força/momento permanecem. W1–W3 são casos inspirados nos
+parâmetros de Walker, não uma reprodução exata de suas cargas medidas.
+
+```bash
+bluerov train --config configs/training/physics_wave_curriculum_filter_bridge.yaml \
+  --output artifacts/training/physics_wave_curriculum_filter_bridge
+
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/physics_wave_curriculum_filter_bridge
+```
+
+O treinamento começa do zero. Os 3 milhões de passos por fase são uma previsão,
+sem teto rígido ou avanço automático por orçamento. Avaliações independentes
+duram 100 s, ignorando os primeiros 10 s. E–H usam 24 episódios, com aprovação
+exigida separadamente em W1, W2 e W3. Não há mistura de episódios de fases
+anteriores neste perfil, para isolar cada redução de filtro.
+
+A receita do artigo está preservada em
+`configs/training/trajectory_curriculum_pre_walker.yaml`. A tentativa anterior
+com W1 abrupto e sem filtros permanece em `physics_wave_curriculum_walker.yaml`.
+Veja [detalhes da ponte com filtro](docs/trajectory_curriculum_filter_bridge.md).
 
 ## Treinamento validado: station keeping por currículo
 
@@ -657,7 +710,7 @@ navegador inclui média absoluta e RMSE de yaw em graus. Inicie um treino novo
 para usar esse feedback; veja [a configuração de yaw](docs/trajectory_curriculum.md#rastreamento-de-yaw).
 
 ```bash
-bluerov train --config configs/training/trajectory_curriculum.yaml \
+bluerov train --config configs/training/trajectory_curriculum_pre_walker.yaml \
   --output artifacts/training/physics_wave_curriculum_yaw
 
 python -m bluerov2_gym.workflows.plotting.training.browser \

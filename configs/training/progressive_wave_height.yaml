@@ -1,0 +1,1827 @@
+reference:
+  commit: 889a766e4615098659a2f923782a1a56f921edd3
+  path: experiments_traj/train_ppo.py
+  sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
+  scope: PPO 889a766 with optional relative-yaw feedback and penalty; std pretraining
+    then corrected mechanics and Hs-normalized waves.
+  implementation: Unmodified historical source plus current simulator constructor
+    logging aliases and configurable yaw feedback/reward.
+environment:
+  id: BlueRov-v0
+  yaw_tracking:
+    weight: 0.5
+    relative_observation: true
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config:
+    dt: 0.1
+    rho: 1000.0
+    g: 9.81
+    mechanics_model: corrected
+    disturbance_model:
+      preset: std
+      normalize_spectrum: true
+    vehicle:
+      base_mass: 14.8
+      prop_mass: 0.07
+      n_thrusters: 6
+      dimensions:
+        x: 0.4
+        y: 0.25
+        z: 0.1
+      inertia:
+        Ixx: 5.2539
+        Ixy: 0.0144
+        Ixz: 0.3341
+        Iyy: 7.942
+        Iyz: 0.026
+        Izz: 6.9123
+    buoyancy:
+      correction_factor: 1.01
+    hydrodynamics:
+      added_mass:
+      - 5.5
+      - 12.7
+      - 14.57
+      - 0.12
+      - 0.12
+      - 0.12
+      linear_damping:
+      - 25.15
+      - 7.364
+      - 17.955
+      - 10.888
+      - 20.761
+      - 3.744
+      quadratic_damping:
+      - 17.77
+      - 125.9
+      - 72.36
+      - 0.1246
+      - 0.1246
+      - 0.1857
+    thrusters:
+      min: -40.0
+      max: 40.0
+      allocation_matrix:
+      - - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.70710678
+        - -0.70710678
+        - -0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - -1.0
+      - - 0.05126524
+        - -0.05126524
+        - -0.05126524
+        - 0.05126524
+        - -0.1105
+        - -0.1105
+      - - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.0025
+        - 0.0025
+      - - 0.16652365
+        - -0.16652365
+        - 0.17500893
+        - -0.17500893
+        - 0.0
+        - 0.0
+    jonswap:
+      Hs: 2.0
+      Tp: 12.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.5
+      - 0.5
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.7
+      alpha_wave: 0.02
+      noise_std: 0.01
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  action_control:
+    mode: body_wrench
+    wrench_limits:
+    - 80.0
+    - 80.0
+    - 60.0
+    - 8.0
+    - 20.0
+  trajectory_reference:
+    depth: -5.0
+    depth_ramp: false
+paths:
+  tensorboard_log: ../../artifacts/training/progressive_wave_height/logs/tensorboard
+  model_dir: ../../artifacts/training/progressive_wave_height/models
+  model_name: ppo_progressive_wave_height
+  vecnormalize_name: vec_normalize_progressive_wave_height.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_physics_curriculum_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0001
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 5
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.0
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs:
+    log_std_init: -1.5
+  target_kl: 0.02
+training:
+  task: trajectory_curriculum
+  device: auto
+  seed: 42
+  phase_planned_timesteps: 3000000
+  tb_log_name: PPO_ProgressiveWaveHeight
+evaluation:
+  every_timesteps: 20000
+  duration_seconds: 100.0
+  settling_time_seconds: 10.0
+  episodes: 20
+  groups: 4
+  seed: 100042
+curriculum_transition:
+  mode: success
+  position_tolerance_m: 0.2
+  min_tracking_fraction: 0.9
+  max_rmse_m: 0.2
+  min_batch_success_rate: 0.9
+  min_group_success_rate: 0.9
+  consecutive_batches: 1
+  rolling_batches: 3
+rehearsal:
+  probability: 0.0
+plateau_early_stopping:
+  enabled: true
+  patience_evaluations: 12
+  warmup_evaluations: 5
+  min_delta_m: 0.005
+  monitor: mastery_progress
+  min_success_delta: 0.025
+curriculum:
+- name: A - preparacao simplificada sem ondas
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 0.0
+    noise_std: 0.0
+    enable_wave_force: false
+  evaluation:
+    episodes: 12
+    groups: 1
+    every_timesteps: 10000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: B1 - simplificada Walker 5% Hs
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.13899999999999998
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.17350000000000002
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.16200000000000003
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: B2 - simplificada Walker 10% Hs
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.27799999999999997
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.34700000000000003
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.32400000000000007
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: C - transferencia mecanica de validacao sem ondas
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 0.0
+    noise_std: 0.0
+    enable_wave_force: false
+  evaluation:
+    episodes: 12
+    groups: 1
+    every_timesteps: 10000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D01 - Walker sem filtro 5% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.13899999999999998
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.17350000000000002
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.16200000000000003
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D02 - Walker sem filtro 10% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.27799999999999997
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.34700000000000003
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.32400000000000007
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D03 - Walker sem filtro 15% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.417
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.5205
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.486
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D04 - Walker sem filtro 20% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.5559999999999999
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 0.6940000000000001
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.6480000000000001
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D05 - Walker sem filtro 30% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 0.834
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 1.041
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 0.972
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D06 - Walker sem filtro 40% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 1.1119999999999999
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 1.3880000000000001
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 1.2960000000000003
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D07 - Walker sem filtro 50% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 1.39
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 1.735
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 1.62
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D08 - Walker sem filtro 60% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 1.668
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 2.082
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 1.944
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D09 - Walker sem filtro 70% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 1.9459999999999997
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 2.429
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 2.268
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D10 - Walker sem filtro 80% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 2.2239999999999998
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 2.7760000000000002
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 2.5920000000000005
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D11 - Walker sem filtro 90% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 2.502
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 3.123
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 2.9160000000000004
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}
+- name: D12 - Walker sem filtro 100% Hs
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 2.78
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 3.47
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 3.24
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3
+    every_timesteps: 20000
+    settling_time_seconds: 10.0
+  transition: {}

@@ -17,6 +17,7 @@ from tqdm.auto import tqdm
 
 from .curriculum_context import PhysicsCurriculumEnv, sample_context
 from .curriculum_resume import load_resume, restore_rng
+from .progress_plateau import update_progress
 from .device import resolve_training_device, report_training_device
 from .mastery import CurriculumEarlyStopped
 from .metrics import PositionErrorCallback
@@ -28,7 +29,9 @@ def phase_settings(config, index):
     stage = config['curriculum'][index]
     evaluation = dict(config['evaluation'], **stage.get('evaluation', {}))
     settings = dict(config['curriculum_transition'], **stage.get('transition', {}))
-    if 'Hs' not in stage.get('ranges', {}):
+    if stage.get('sea_cases'):
+        evaluation['groups'] = len(stage['sea_cases'])
+    elif 'Hs' not in stage.get('ranges', {}):
         evaluation['groups'] = 1  # No artificial groups for identical sea conditions.
     return evaluation, settings
 
@@ -78,11 +81,18 @@ def validate_config(config):
     if config['training']['phase_planned_timesteps'] <= 0:
         raise ValueError('The planned phase length must be positive.')
     plateau = config.get('plateau_early_stopping', {})
+    if plateau.get('monitor', 'rmse') not in {'rmse', 'mastery_progress'}:
+        raise ValueError('Unknown plateau monitor.')
+    if not 0 <= plateau.get('min_success_delta', .025) <= 1:
+        raise ValueError('Invalid plateau success delta.')
     if plateau.get('enabled') and (plateau['patience_evaluations'] < 1 or
                                   plateau['warmup_evaluations'] < 0 or plateau['min_delta_m'] < 0):
         raise ValueError('Invalid optional plateau settings.')
     for i, stage in enumerate(stages):
         phase_eval, phase_gate = phase_settings(config, i)
+        window = phase_gate.get('rolling_batches', 1)
+        if not isinstance(window, int) or isinstance(window, bool) or window < 1:
+            raise ValueError('rolling_batches must be a positive integer.')
         if (phase_eval['episodes'] < 1 or phase_eval['groups'] < 1 or
                 phase_eval['episodes'] % phase_eval['groups'] or phase_eval['every_timesteps'] < 1 or
                 not 0 <= phase_eval['settling_time_seconds'] < phase_eval['duration_seconds'] or
@@ -129,6 +139,14 @@ def curriculum_env(config, seed):
     return PhysicsCurriculumEnv(config, seed)
 
 
+def rolling_mastery(batches, settings):
+    """Aggregate recent independent episodes without relaxing episode tolerances."""
+    count = settings.get('rolling_batches', 1)
+    if len(batches) < count:
+        return None
+    return batch_result([episode for batch in batches[-count:] for episode in batch], settings)
+
+
 def evaluate_stage(model, normalizer, config, index, batch_index):
     """Fresh validation contexts; never step/update the training VecNormalize."""
     evaluation, settings = phase_settings(config, index)
@@ -170,7 +188,8 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                         if info.get('finetune/corner_window', False):
                             corner_errors.append(errors[-1])
                     rewards.append(reward)
-                    saturated.append(float(np.mean(np.abs(action) >= 39.999)))
+                    saturated.append(info.get('metrics/thruster_saturation_fraction',
+                                              float(np.mean(np.abs(action) >= 39.999))))
                     if terminated or truncated or not math.isfinite(errors[-1]):
                         break
                 result = episode_result(errors, terminated, truncated, horizon, settling, settings, group)
@@ -226,7 +245,7 @@ def train_trajectory_curriculum(config):
     validate_config(config)
     resume = load_resume(config)
     warm_start = None
-    if config['training'].get('task') == 'trajectory_finetune' and resume is None:
+    if config.get('finetuning') and resume is None:
         from .finetune_polygon import source_pair
         warm_start = source_pair(config)
     paths, settings = config['paths'], config['curriculum_transition']
@@ -342,6 +361,8 @@ def train_trajectory_curriculum(config):
                 status['successful_batches'] = 0  # Recheck mastery under the new criteria.
             report()
             best_rmse, stale = None, 0
+            progress = {}
+            recent_batches = []  # Reassess a full window after any resume.
             bar = PhaseProgress(status['planned_timesteps'], status['start_step'], stage['name'], report)
             while status['successful_batches'] < settings['consecutive_batches']:
                 # Each call returns after complete rollout optimization. Nothing
@@ -350,17 +371,33 @@ def train_trajectory_curriculum(config):
                             reset_num_timesteps=first_learn, tb_log_name=config['training']['tb_log_name'])
                 first_learn = False
                 result = evaluate_stage(model, env, config, index, status['evaluations'])
+                window_size = settings.get('rolling_batches', 1)
+                if window_size > 1:
+                    recent_batches.append(result['episodes'])
+                    recent_batches = recent_batches[-window_size:]
+                    mastery = rolling_mastery(recent_batches, settings)
+                    result['current_batch_passed'] = result['passed']
+                    result['mastery_window'] = dict(
+                        batches=len(recent_batches), required_batches=window_size,
+                        **({k: v for k, v in mastery.items() if k != 'episodes'}
+                           if mastery else {'passed': False}))
+                    result['passed'] = bool(mastery and mastery['passed'])
                 status['evaluations'] += 1
                 status['validation_timesteps'] += sum(e['steps'] for e in result['episodes'])
                 status['successful_batches'] = status['successful_batches'] + 1 if result['passed'] else 0
                 status['last_evaluation'] = {k: v for k, v in result.items() if k != 'episodes'}
                 rmse = result['mean_rmse_m']
                 plateau = config.get('plateau_early_stopping', {})
-                improved = rmse is not None and (best_rmse is None or best_rmse - rmse > plateau.get('min_delta_m', .01))
-                if improved:
-                    best_rmse, stale = rmse, 0
-                elif status['evaluations'] > plateau.get('warmup_evaluations', 5):
-                    stale += 1
+                if plateau.get('monitor') == 'mastery_progress':
+                    progress = update_progress(progress, result, plateau)
+                    stale = progress.get('stale', 0)
+                    status['progress_monitor'] = deepcopy(progress)
+                else:
+                    improved = rmse is not None and (best_rmse is None or best_rmse - rmse > plateau.get('min_delta_m', .01))
+                    if improved:
+                        best_rmse, stale = rmse, 0
+                    elif status['evaluations'] > plateau.get('warmup_evaluations', 5):
+                        stale += 1
                 status['stale_evaluations'] = stale
                 report()
                 suffix = f'_stage_{index+1}_eval_{model.num_timesteps}'
@@ -379,6 +416,9 @@ def train_trajectory_curriculum(config):
                 if (plateau.get('enabled') and stale >= plateau['patience_evaluations'] and
                         status['successful_batches'] < settings['consecutive_batches']):
                     status['status'] = 'early_stopped'
+                    status['stop_reason'] = ('Validation stagnation: '
+                                             f'{stale} assessments without meaningful progress '
+                                             f'({plateau.get("monitor", "rmse")}).')
                     report()
                     save_pair('_incomplete')
                     raise CurriculumEarlyStopped('Independent validation stagnated; curriculum is incomplete.')

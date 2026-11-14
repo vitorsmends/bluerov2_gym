@@ -15,6 +15,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from .base import BaseController
 from ..env_utils import ENV_ID, OBSERVATION_ADAPTERS, build_tracking_observation
+from ...action_allocation import PolicyActionAllocation
 
 
 class PPOController(BaseController):
@@ -27,6 +28,8 @@ class PPOController(BaseController):
         env_config_path: str = "configs/dynamics/blue_rov_config.yaml",
         dynamics_config_path: str = "configs/dynamics/dynamics_config.yaml",
         observation_adapter: str = 'legacy',
+        action_control: dict | None = None,
+        allocation_dynamics=None,
     ):
         if observation_adapter not in OBSERVATION_ADAPTERS:
             raise ValueError(f'observation_adapter must be one of {OBSERVATION_ADAPTERS}.')
@@ -53,6 +56,12 @@ class PPOController(BaseController):
         self.vec_env.norm_reward = False
 
         self.model = PPO.load(str(self.model_path))
+        self.action_allocator = PolicyActionAllocation(
+            allocation_dynamics or vec_env.envs[0].unwrapped.dynamics, action_control)
+        if self.action_allocator.enabled and self.model.action_space != self.action_allocator.action_space:
+            raise ValueError('Policy action space does not match body-wrench allocation.')
+        if not self.action_allocator.enabled and self.model.action_space.shape != (6,):
+            raise ValueError('This PPO requires its training action_control configuration.')
         print(f'PPO observation adapter: {self.observation_adapter}', flush=True)
 
         self.last_metrics = self._empty_metrics()
@@ -119,6 +128,7 @@ class PPOController(BaseController):
         post_start = time.perf_counter()
 
         action = np.asarray(action, dtype=np.float32).reshape(-1)
+        action, _ = self.action_allocator.convert(action)
         action = np.clip(action, -40.0, 40.0)
 
         post_time = time.perf_counter() - post_start

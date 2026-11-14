@@ -1,0 +1,498 @@
+# New default trajectory curriculum: Walker-inspired W1-W3, not exact buoy/load replication.
+# Fresh PPO, constant-depth eight at -5m; both filters/noise disabled; unit velocity scale.
+# 3M steps is a planning reference, never a hard phase budget.
+reference:
+  commit: 889a766e4615098659a2f923782a1a56f921edd3
+  path: experiments_traj/train_ppo.py
+  sha256: 44758d653df6a9d843d349664cb62730d9d37887311edcee75f3ff76b5697424
+  scope: Historical PPO architecture, feedback, reset and reward; configurable constant-depth
+    eight at -5m; std preparation then target mechanics with Walker W1-W3 wave analogues.
+  implementation: Unmodified historical source plus current simulator constructor
+    logging aliases and configurable yaw feedback/reward.
+environment:
+  id: BlueRov-v0
+  yaw_tracking:
+    weight: 0.5
+    relative_observation: true
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config:
+    dt: 0.1
+    rho: 1000.0
+    g: 9.81
+    mechanics_model: corrected
+    disturbance_model:
+      preset: std
+      normalize_spectrum: true
+      wave_filter: false
+      noise_filter: false
+      finite_depth: true
+      body_frame: true
+    vehicle:
+      base_mass: 14.8
+      prop_mass: 0.07
+      n_thrusters: 6
+      dimensions:
+        x: 0.4
+        y: 0.25
+        z: 0.1
+      inertia:
+        Ixx: 5.2539
+        Ixy: 0.0144
+        Ixz: 0.3341
+        Iyy: 7.942
+        Iyz: 0.026
+        Izz: 6.9123
+    buoyancy:
+      correction_factor: 1.01
+    hydrodynamics:
+      added_mass:
+      - 5.5
+      - 12.7
+      - 14.57
+      - 0.12
+      - 0.12
+      - 0.12
+      linear_damping:
+      - 25.15
+      - 7.364
+      - 17.955
+      - 10.888
+      - 20.761
+      - 3.744
+      quadratic_damping:
+      - 17.77
+      - 125.9
+      - 72.36
+      - 0.1246
+      - 0.1246
+      - 0.1857
+    thrusters:
+      min: -40.0
+      max: 40.0
+      allocation_matrix:
+      - - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.70710678
+        - -0.70710678
+        - -0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - -1.0
+      - - 0.05126524
+        - -0.05126524
+        - -0.05126524
+        - 0.05126524
+        - -0.1105
+        - -0.1105
+      - - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.0025
+        - 0.0025
+      - - 0.16652365
+        - -0.16652365
+        - 0.17500893
+        - -0.17500893
+        - 0.0
+        - 0.0
+    jonswap:
+      Hs: 2.78
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  trajectory_reference:
+    depth: -5.0
+    depth_ramp: false
+paths:
+  tensorboard_log: ../../artifacts/logs/tensorboard
+  model_dir: ../../artifacts/models/physics_wave_curriculum_walker
+  model_name: ppo_trajectory_curriculum
+  vecnormalize_name: vec_normalize_trajectory_curriculum.pkl
+vecnormalize:
+  norm_obs: true
+  norm_reward: true
+  clip_obs: 10.0
+checkpoint:
+  save_freq: 50000
+  name_prefix: ppo_physics_curriculum_checkpoint
+  save_vecnormalize: true
+ppo:
+  policy: MultiInputPolicy
+  verbose: 1
+  learning_rate: 0.0003
+  n_steps: 2048
+  batch_size: 64
+  n_epochs: 10
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  policy_kwargs: {}
+training:
+  task: trajectory_curriculum
+  device: auto
+  seed: 42
+  phase_planned_timesteps: 3000000
+  tb_log_name: PPO_WalkerWaves_Curriculum
+evaluation:
+  every_timesteps: 20000
+  duration_seconds: 100.0
+  settling_time_seconds: 10.0
+  episodes: 20
+  groups: 4
+  seed: 100042
+curriculum_transition:
+  mode: success
+  position_tolerance_m: 0.2
+  min_tracking_fraction: 0.9
+  max_rmse_m: 0.2
+  min_batch_success_rate: 0.9
+  min_group_success_rate: 0.9
+  consecutive_batches: 3
+rehearsal:
+  probability: 0.3
+plateau_early_stopping:
+  enabled: false
+  patience_evaluations: 20
+  warmup_evaluations: 5
+  min_delta_m: 0.01
+curriculum:
+- name: A - std sem ondas, oito a 5 m
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: false
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 0.0
+    scale: 0.0
+    max_current: 0.0
+    noise_std: 0.0
+    enable_wave_force: false
+    alpha_js: 0.0
+  evaluation:
+    every_timesteps: 10000
+    settling_time_seconds: 10.0
+    groups: 1
+  transition:
+    consecutive_batches: 2
+- name: B - std W1
+  mechanics_model: std
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 2.78
+    Tp: 7.1
+    gamma: 3.3
+    N: 64
+    wave_dir:
+    - 1.0
+    - 0.0
+    directional_spread_deg: 0.0
+    water_depth: 54.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -5.0
+    scale: 1.0
+    max_current: 1000000.0
+    alpha_wave: 0.02
+    noise_std: 0.0
+    alpha_noise: 0.3
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain:
+    - 35.0
+    - 35.0
+    - 50.0
+    wave_force_application_point:
+    - 0.0
+    - 0.0
+    - 0.05
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
+    seed: 42
+  evaluation:
+    every_timesteps: 10000
+    groups: 1
+  transition:
+    consecutive_batches: 2
+- name: C1 - alvo W1
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 2.78
+    Tp: 7.1
+    gamma: 3.3
+    N: 64
+    wave_dir:
+    - 1.0
+    - 0.0
+    directional_spread_deg: 0.0
+    water_depth: 54.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -5.0
+    scale: 1.0
+    max_current: 1000000.0
+    alpha_wave: 0.02
+    noise_std: 0.0
+    alpha_noise: 0.3
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain:
+    - 35.0
+    - 35.0
+    - 50.0
+    wave_force_application_point:
+    - 0.0
+    - 0.0
+    - 0.05
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
+    seed: 42
+- name: C2 - alvo W2
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 3.47
+    Tp: 9.5
+    gamma: 3.3
+    N: 64
+    wave_dir:
+    - 1.0
+    - 0.0
+    directional_spread_deg: 0.0
+    water_depth: 54.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -5.0
+    scale: 1.0
+    max_current: 1000000.0
+    alpha_wave: 0.02
+    noise_std: 0.0
+    alpha_noise: 0.3
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain:
+    - 35.0
+    - 35.0
+    - 50.0
+    wave_force_application_point:
+    - 0.0
+    - 0.0
+    - 0.05
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
+    seed: 42
+- name: C3 - alvo W3
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap:
+    Hs: 3.24
+    Tp: 11.1
+    gamma: 3.3
+    N: 64
+    wave_dir:
+    - 1.0
+    - 0.0
+    directional_spread_deg: 0.0
+    water_depth: 54.0
+    x_eval: 0.0
+    y_eval: 0.0
+    z_eval: -5.0
+    scale: 1.0
+    max_current: 1000000.0
+    alpha_wave: 0.02
+    noise_std: 0.0
+    alpha_noise: 0.3
+    alpha_js: 0.0081
+    enable_wave_force: true
+    wave_force_gain:
+    - 35.0
+    - 35.0
+    - 50.0
+    wave_force_application_point:
+    - 0.0
+    - 0.0
+    - 0.05
+    max_wave_force: 25.0
+    max_wave_moment: 8.0
+    seed: 42
+- name: C4 - mistura W1 W2 W3
+  mechanics_model: corrected
+  disturbance_model:
+    preset: std
+    normalize_spectrum: true
+    wave_filter: false
+    noise_filter: false
+    finite_depth: true
+    body_frame: true
+  jonswap: {}
+  sea_cases:
+  - name: W1
+    jonswap:
+      Hs: 2.78
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W2
+    jonswap:
+      Hs: 3.47
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  - name: W3
+    jonswap:
+      Hs: 3.24
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+  evaluation:
+    episodes: 24
+    groups: 3

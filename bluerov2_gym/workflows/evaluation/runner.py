@@ -297,6 +297,11 @@ class ExperimentRunner:
                         for repetition_id in range(repetitions):
                             seed = seed_base + repetition_id
                             obs = _reset_with_jonswap(env, jonswap, seed)
+                            if exp.get("initial_position") is not None:
+                                obs = _set_stationkeeping_state(
+                                    env, exp["initial_position"],
+                                    float(exp.get("initial_yaw_rad", 0.0)), offset=False,
+                                )
                             controller.reset()
 
                             for k in range(steps):
