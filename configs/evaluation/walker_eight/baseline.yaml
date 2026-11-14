@@ -1,0 +1,256 @@
+# Walker W1-W3 Hs/Tp analogue, not an exact reproduction of buoy spectra or loading.
+# Same target mechanical plant; first-order Airy waves, body rotation, no filters/noise.
+# max_current=1e6 disables practical velocity capping; empirical force caps retained.
+experiment:
+  mode: trajectory_suite
+  dt: 0.1
+  steps: 1000
+  repetitions: 3
+  seed: 42
+  thrust_limit: 40.0
+  render_mode: null
+  initial_position:
+  - 0.0
+  - 0.0
+  - -5.0
+  initial_yaw_rad: 0.0
+environment:
+  id: BlueRov-v0
+  yaw_tracking:
+    weight: 0.5
+    relative_observation: true
+  max_episode_steps: null
+  render_mode: null
+  config:
+    dt: 0.1
+  dynamics_config:
+    dt: 0.1
+    rho: 1000.0
+    g: 9.81
+    mechanics_model: corrected
+    disturbance_model:
+      preset: std
+      normalize_spectrum: true
+      wave_filter: false
+      noise_filter: false
+      finite_depth: true
+      body_frame: true
+    vehicle:
+      base_mass: 14.8
+      prop_mass: 0.07
+      n_thrusters: 6
+      dimensions:
+        x: 0.4
+        y: 0.25
+        z: 0.1
+      inertia:
+        Ixx: 5.2539
+        Ixy: 0.0144
+        Ixz: 0.3341
+        Iyy: 7.942
+        Iyz: 0.026
+        Izz: 6.9123
+    buoyancy:
+      correction_factor: 1.01
+    hydrodynamics:
+      added_mass:
+      - 5.5
+      - 12.7
+      - 14.57
+      - 0.12
+      - 0.12
+      - 0.12
+      linear_damping:
+      - 25.15
+      - 7.364
+      - 17.955
+      - 10.888
+      - 20.761
+      - 3.744
+      quadratic_damping:
+      - 17.77
+      - 125.9
+      - 72.36
+      - 0.1246
+      - 0.1246
+      - 0.1857
+    thrusters:
+      min: -40.0
+      max: 40.0
+      allocation_matrix:
+      - - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.70710678
+        - -0.70710678
+        - -0.70710678
+        - 0.70710678
+        - 0.0
+        - 0.0
+      - - 0.0
+        - 0.0
+        - 0.0
+        - 0.0
+        - 1.0
+        - -1.0
+      - - 0.05126524
+        - -0.05126524
+        - -0.05126524
+        - 0.05126524
+        - -0.1105
+        - -0.1105
+      - - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.05126524
+        - -0.0025
+        - 0.0025
+      - - 0.16652365
+        - -0.16652365
+        - 0.17500893
+        - -0.17500893
+        - 0.0
+        - 0.0
+    jonswap:
+      Hs: 2.0
+      Tp: 12.0
+      gamma: 3.3
+      N: 64
+      wave_dir:
+      - 0.5
+      - 0.5
+      directional_spread_deg: 25.0
+      water_depth: 30.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -2.0
+      scale: 0.5
+      max_current: 0.7
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain:
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point:
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+controllers:
+- name: ppo
+  enabled: true
+  params:
+    observation_adapter: legacy_yaw_error
+    model_path: /Users/mendes/Github/bluerov2_gym/artifacts/training/physics_wave_curriculum_yaw/models/ppo_trajectory_curriculum.zip
+    vecnormalize_path: /Users/mendes/Github/bluerov2_gym/artifacts/training/physics_wave_curriculum_yaw/models/vec_normalize_trajectory_curriculum.pkl
+    env_config_path: /Users/mendes/Github/bluerov2_gym/configs/dynamics/blue_rov_config.yaml
+    dynamics_config_path: /Users/mendes/Github/bluerov2_gym/configs/dynamics/dynamics_config.yaml
+- name: nmpc
+  enabled: true
+  params:
+    horizon: 10
+    control_blocks: 5
+- name: smc
+  enabled: true
+  params: {}
+disturbance:
+  default_scenario: walker_w1
+  scenario_names:
+  - walker_w1
+  - walker_w2
+  - walker_w3
+  scenarios:
+    walker_w1:
+      Hs: 2.78
+      Tp: 7.1
+      gamma: 3.3
+      N: 64
+      wave_dir: &id001
+      - 1.0
+      - 0.0
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: &id002
+      - 35.0
+      - 35.0
+      - 50.0
+      wave_force_application_point: &id003
+      - 0.0
+      - 0.0
+      - 0.05
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+    walker_w2:
+      Hs: 3.47
+      Tp: 9.5
+      gamma: 3.3
+      N: 64
+      wave_dir: *id001
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: *id002
+      wave_force_application_point: *id003
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+    walker_w3:
+      Hs: 3.24
+      Tp: 11.1
+      gamma: 3.3
+      N: 64
+      wave_dir: *id001
+      directional_spread_deg: 0.0
+      water_depth: 54.0
+      x_eval: 0.0
+      y_eval: 0.0
+      z_eval: -5.0
+      scale: 1.0
+      max_current: 1000000.0
+      alpha_wave: 0.02
+      noise_std: 0.0
+      alpha_noise: 0.3
+      alpha_js: 0.0081
+      enable_wave_force: true
+      wave_force_gain: *id002
+      wave_force_application_point: *id003
+      max_wave_force: 25.0
+      max_wave_moment: 8.0
+      seed: 42
+trajectories:
+- name: figure_eight_depth
+  enabled: true
+  params:
+    a: 1.0
+    depth: -5.0
+    depth_amp: 0.0
+    period: 41.88790204786391
