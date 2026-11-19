@@ -28,3 +28,27 @@ class ProgressTests(unittest.TestCase):
         result = self.result()
         result['mastery_window'] = dict(batches=1, required_batches=3)
         self.assertEqual(update_progress({}, result, self.settings), {})
+
+    def test_acquisition_does_not_exhaust_patience(self):
+        settings = dict(self.settings, activation_success_rate=.5)
+        state = {}
+        for _ in range(50):
+            state = update_progress(state, self.result(success=0., worst=0., rmse=None), settings)
+        self.assertFalse(state['active'])
+        self.assertEqual(state['stale'], 0)
+        state = update_progress(state, self.result(success=.6), settings)
+        self.assertTrue(state['active'])
+        state = update_progress(state, self.result(success=0., worst=0., rmse=None), settings)
+        self.assertTrue(state['active'])
+        self.assertEqual(state['stale'], 1)
+
+    def test_finetuning_yaw_improvement_counts_as_progress(self):
+        settings = dict(self.settings, monitor_corner_yaw=True, min_yaw_delta_deg=.25)
+        result = dict(self.result(), mean_yaw_mae_deg=10., mean_corner_rmse_m=.2)
+        state = update_progress({}, result, settings)
+        state = update_progress(state, result, settings)
+        self.assertEqual(state['stale'], 1)
+        result['mean_yaw_mae_deg'] = 9.5
+        state = update_progress(state, result, settings)
+        self.assertEqual(state['stale'], 0)
+        self.assertIn('yaw', state['improved'])

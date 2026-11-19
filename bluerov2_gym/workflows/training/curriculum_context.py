@@ -132,11 +132,7 @@ class PhysicsCurriculumEnv(Frozen889TrajectoryEnv):
             context = sample_context(self.curriculum_config, index, self.context_rng, anchor=anchor)
             self.stage_resets += 1
         self.current_context = context
-        trajectory = context.get('trajectory_reference',
-                                 self.curriculum_config['environment'].get('trajectory_reference'))
-        if trajectory is not None:
-            # Select before the archived reset computes the reference and initial state.
-            self.traj = ConfiguredEightTrajectory(trajectory)
+        self.configure_reference(context)
         self.jonswap_params = deepcopy(context['jonswap'])
         self.dynamics = Dynamics(dynamics_config=context_dynamics_config(self.curriculum_config, context))
         self.action_allocator = PolicyActionAllocation(
@@ -148,6 +144,12 @@ class PhysicsCurriculumEnv(Frozen889TrajectoryEnv):
             obs = build_tracking_observation(obs, np.concatenate([pos, att, vel, np.zeros(3)]),
                                              'legacy_yaw_error')
         return obs, info
+
+    def configure_reference(self, context):
+        trajectory = context.get('trajectory_reference',
+                                 self.curriculum_config['environment'].get('trajectory_reference'))
+        if trajectory is not None:
+            self.traj = ConfiguredEightTrajectory(trajectory)
 
     def step(self, action):
         action, allocation_info = self.action_allocator.convert(action)

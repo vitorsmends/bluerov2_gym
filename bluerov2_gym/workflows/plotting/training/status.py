@@ -3,6 +3,38 @@ import math
 from ...configuration import merge
 
 
+def execution_status(runtime=None, manifest=None):
+    """Report recorded termination explicitly; stale logs alone do not imply exit."""
+    runtime, manifest = runtime or {}, manifest or {}
+    terminal = {'completed', 'exposure_completed', 'early_stopped', 'interrupted', 'failed'}
+    state = runtime.get('status')
+    if state not in terminal:
+        state = manifest.get('status') if manifest.get('status') in terminal else state
+    if state not in terminal | {'training'}:
+        state = 'preparing' if manifest.get('status') == 'created' else 'unknown'
+    labels = dict(exposure_completed='Exposição a todas as fases concluída, sem domínio completo', completed='Treinamento concluído', early_stopped='Treinamento encerrado por early stopping',
+                  interrupted='Treinamento interrompido', failed='Treinamento encerrado com falha',
+                  training='Treinamento em andamento', preparing='Preparando treinamento',
+                  unknown='Estado da execução não disponível')
+    reasons = dict(exposure_completed='Todos os níveis foram visitados; algumas fases avançaram por estagnação, sem aprovação.', completed='A execução concluiu o protocolo de treinamento.',
+                   interrupted='A execução foi interrompida antes da conclusão.',
+                   failed='A execução terminou com erro.',
+                   early_stopped='A avaliação independente acionou o critério de parada por estagnação.',
+                   training='A execução ainda não registrou encerramento.',
+                   preparing='Aguardando os primeiros registros do treinador.',
+                   unknown='Não há registro suficiente para confirmar o estado.')
+    reason = reasons[state]
+    if state == 'early_stopped' and runtime.get('stale_evaluations') is not None:
+        reason += f' {runtime["stale_evaluations"]} avaliações sem melhora significativa. O currículo não foi concluído.'
+    progress = runtime.get('progress_monitor', {})
+    if state == 'training' and progress.get('active') is False:
+        reason = 'Aquisição inicial: a paciência de parada aguarda o nível mínimo de sucesso configurado.'
+    return dict(unmastered_stages=runtime.get('unmastered_stages', []), state=state, label=labels[state], terminal=state in terminal, reason=reason,
+                recorded_reason=runtime.get('stop_reason') or manifest.get('reason') or manifest.get('error'),
+                ended_at=runtime.get('updated_at') if state in terminal else None,
+                step=runtime.get('step'), phase=runtime.get('name'))
+
+
 def training_phase(config, step, runtime=None):
     """Describe the phase belonging to the latest recorded rollout, not wall time."""
     lessons = config.get('curriculum', [])
@@ -17,21 +49,28 @@ def training_phase(config, step, runtime=None):
         sea = merge(sea, merge(config.get('jonswap_defaults', {}), lesson.get('jonswap', {})))
         label = f'Fase {index}/{len(lessons)}: {lesson["name"]}'
         if runtime.get('mode') == 'physics_wave_success':
-            label += (f' — validações aprovadas: {runtime.get("successful_batches", 0)}/'
+            evidence = 'janelas independentes aprovadas' if runtime.get('mastery_evidence') == 'nonoverlapping_windows' else 'validações aprovadas'
+            label += (f' — {evidence}: {runtime.get("successful_batches", 0)}/'
                       f'{runtime.get("required_batches", 3)}')
             window = runtime.get('last_evaluation', {}).get('mastery_window')
             if window:
                 label += f' — janela: {window["batches"]}/{window["required_batches"]} avaliações'
                 if 'success_rate' in window:
                     label += f' (sucesso {window["success_rate"]:.1%})'
+            progress = runtime.get('progress_monitor', {})
+            if progress.get('active') is False:
+                label += ' — aquisição inicial: paciência de parada suspensa'
             context = runtime.get('effective_context') or {}
             sea = merge(sea, context.get('jonswap', {}))
             if context.get('sea_case'):
                 label += f' — {context["sea_case"]}'
+            skipped = [h['index'] for h in runtime.get('history', []) if h.get('status') == 'advanced_on_plateau']
+            if skipped:
+                label += ' — fases sem domínio: ' + ', '.join(map(str, skipped))
             label += f' — mecânica: {runtime.get("mechanics_model", "?")}'
             if context and context.get('stage_index', index-1) != index-1:
                 label += f' — revisão: {context["name"]}'
-            if runtime.get('status') in {'interrupted', 'early_stopped', 'failed', 'completed'}:
+            if runtime.get('status') in {'interrupted', 'early_stopped', 'failed', 'completed', 'exposure_completed'}:
                 label += f' — {runtime["status"]}'
         elif runtime.get('mode') == 'trajectory_success':
             required = runtime.get('required_episodes', 3)

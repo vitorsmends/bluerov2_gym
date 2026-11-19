@@ -1,5 +1,6 @@
 """Legible thesis wave-elevation map and cross-section from the benchmark generator."""
 import hashlib,json
+from pathlib import Path
 import numpy as np
 import yaml
 import matplotlib
@@ -10,9 +11,9 @@ from .finetune_controller_comparison import ROOT
 from bluerov2_gym.envs.core.dynamics import Dynamics
 
 
-def generate():
-    source=ROOT/'artifacts/evaluation/physics_wave_curriculum_yaw_sea_states/config.resolved.yaml'
-    cfg=yaml.safe_load(source.read_text());params=dict(cfg['disturbance']['scenarios']['moderate'],seed=42)
+def generate(source=None, scenario='walker_w1'):
+    source=Path(source) if source else ROOT/'artifacts/evaluation/article_scale4_four_controllers/benchmark/config.resolved.yaml'
+    cfg=yaml.safe_load(source.read_text());params=dict(cfg['disturbance']['scenarios'][scenario],seed=42)
     model=Dynamics(jonswap_params=params,dynamics_config=cfg['environment']['dynamics_config'])
     def elevation(x,y):
         x,y=np.broadcast_arrays(x,y);eta=np.zeros_like(x,dtype=float)
@@ -39,7 +40,7 @@ def generate():
         axes[1].legend(fontsize=10,loc='upper right')
         for ext in ['pdf','png']:fig.savefig(out/f'directional_field_compact.{ext}',dpi=300,bbox_inches='tight')
         plt.close(fig)
-    (out/'directional_field_compact.json').write_text(json.dumps({'config':str(source),'sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'scenario':'moderate','seed':42,'snapshot_s':55,'slice_y_m':0,'note':'Same wave components; visualization only. No vehicle simulation or policy evaluation.'},indent=2))
+    (out/'directional_field_compact.json').write_text(json.dumps({'config':str(source),'sha256':hashlib.sha256(source.read_bytes()).hexdigest(),'scenario':scenario,'seed':42,'snapshot_s':55,'slice_y_m':0,'note':'Same wave components; visualization only. No vehicle simulation or policy evaluation.'},indent=2))
     print(out/'directional_field_compact.pdf')
 
 if __name__=='__main__':generate()

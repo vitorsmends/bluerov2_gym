@@ -33,30 +33,51 @@ def source_pair(config):
                         for p in [model, normalizer, run / 'config.resolved.yaml']})
 
 
+def trajectory_specs(settings, assessment=False):
+    if assessment and settings.get('assessment_trajectories'):
+        return settings['assessment_trajectories']
+    return settings.get('trajectories') or [settings['trajectory']]
+
+
 def validate_finetuning(config):
     settings = config['finetuning']
-    trajectory = settings['trajectory']
-    if trajectory['name'] not in {'square', 'star'}:
-        raise ValueError('This fine-tuning routine trains and assesses only the selected polygon.')
-    params = trajectory.get('params', {})
-    period = float(params.get('period', 100. if trajectory['name']=='star' else 80.))
-    segments = 10 if trajectory['name']=='star' else 4
-    side = float(params.get('side', 1.6))
-    if not all(math.isfinite(x) and x > 0 for x in [period, side, settings['episode_seconds']]):
-        raise ValueError('Square period, side and episode_seconds must be finite and positive.')
     focus = settings.get('corner_reset', {})
     probability = float(focus.get('probability', 0.))
     lo, hi = focus.get('seconds_before_corner', [1., 5.])
-    if not 0 <= probability <= 1 or not 0 < lo <= hi < period / segments:
-        raise ValueError('Invalid corner-focused reset probability/window.')
+    if not 0 <= probability <= 1 or not math.isfinite(settings['episode_seconds']) or settings['episode_seconds'] <= 0:
+        raise ValueError('Invalid reset probability or episode duration.')
+    for trajectory in trajectory_specs(settings):
+        if trajectory['name'] not in {'square', 'star'}:
+            raise ValueError('Fine-tuning training references must be square or star.')
+        params = trajectory.get('params', {})
+        period = float(params.get('period', 100. if trajectory['name']=='star' else 80.))
+        segments = 10 if trajectory['name']=='star' else 4
+        if not math.isfinite(period) or not 0 < lo <= hi < period / segments:
+            raise ValueError('Invalid corner-focused reset window or period.')
+        create_trajectory(trajectory['name'], params)
+    overrides = settings.get('optimizer_overrides', {})
+    if set(overrides) - {'learning_rate', 'target_kl', 'n_epochs', 'ent_coef'}:
+        raise ValueError('Unsupported fine-tuning optimizer override.')
+    for key, value in overrides.items():
+        if not math.isfinite(value) or value < 0 or (key != 'ent_coef' and value == 0):
+            raise ValueError('Invalid fine-tuning optimizer override.')
     for stage in config['curriculum']:
         if stage['mechanics_model'] != 'corrected':
             raise ValueError('Fine-tuning never returns to preparation mechanics.')
         evaluation = dict(config['evaluation'], **stage.get('evaluation', {}))
+        if stage.get('sea_cases'):
+            evaluation['groups'] = len(stage['sea_cases'])
         if evaluation['episodes'] % evaluation['groups']:
             raise ValueError('Assessment episodes must cover Hs groups equally.')
-        if evaluation['duration_seconds'] - evaluation['settling_time_seconds'] < period:
-            raise ValueError('Assessment after settling must cover a full polygon cycle.')
+        specs = trajectory_specs(settings, assessment=True)
+        if evaluation['episodes'] % (evaluation['groups'] * len(specs)):
+            raise ValueError('Assessment must balance every sea/trajectory combination.')
+        for trajectory in specs:
+            create_trajectory(trajectory['name'], trajectory.get('params', {}))
+            params = trajectory.get('params', {})
+            period = float(params.get('period', 100. if trajectory['name']=='star' else 80.))
+            if evaluation['duration_seconds'] - evaluation['settling_time_seconds'] < period:
+                raise ValueError('Assessment after settling must cover a full reference cycle.')
     source_pair(config)
 
 
@@ -66,7 +87,8 @@ class PolygonReference:
         self.start_phase = start_phase
         self.phase_offset = None
         self.reference = create_trajectory(name, params)
-        self.segment_seconds = self.reference.period / (len(self.reference.points)-1)
+        self.segment_seconds = (self.reference.period / (len(self.reference.points)-1)
+                                if hasattr(self.reference, 'points') else None)
 
     def get_state_at_time(self, t):
         if self.phase_offset is None:
@@ -75,14 +97,18 @@ class PolygonReference:
         return ref[:3].astype(np.float32), ref[3:6].astype(np.float32), ref[6:9].astype(np.float32)
 
     def since_corner(self, t):
+        if self.segment_seconds is None:
+            return float('inf')
         return (t + self.phase_offset) % self.segment_seconds
 
 
 class FineTuningEnv(PhysicsCurriculumEnv):
     """Retain the existing feedback/reward and change only reference/reset horizon."""
     def __init__(self, config, context_seed=None):
-        self.polygon_name = config['finetuning']['trajectory']['name']
-        self.polygon_settings = config['finetuning']['trajectory'].get('params', {})
+        self.finetuning_settings = config['finetuning']
+        first = trajectory_specs(self.finetuning_settings)[0]
+        self.polygon_name = first['name']
+        self.polygon_settings = first.get('params', {})
         self.reset_focus = config['finetuning'].get('corner_reset', {})
         self.episode_steps = math.ceil(config['finetuning']['episode_seconds'] /
                                        config['environment']['config']['dt'])
@@ -94,6 +120,11 @@ class FineTuningEnv(PhysicsCurriculumEnv):
     def reset(self, seed=None, options=None):
         options = options or {}
         self.assessment = bool(options.get('assessment', False))
+        specs = trajectory_specs(self.finetuning_settings, self.assessment)
+        choice = (int(options['trajectory_index']) if self.assessment and 'trajectory_index' in options
+                  else int(self.context_rng.integers(len(specs))) if len(specs) > 1 else 0)
+        self.polygon_name = specs[choice]['name']
+        self.polygon_settings = specs[choice].get('params', {})
         self.trajectory_name = self.polygon_name
         period = float(self.polygon_settings.get('period', 100. if self.polygon_name=='star' else 80.))
         focused = (not self.assessment and self.context_rng.random() < self.reset_focus.get('probability', 0.))
@@ -109,6 +140,11 @@ class FineTuningEnv(PhysicsCurriculumEnv):
         obs, info = super().reset(seed=seed, options=options)
         self.current_context.update(trajectory=self.polygon_name, start_phase_s=float(phase), corner_focused_reset=bool(focused))
         return obs, info
+
+    def configure_reference(self, context):
+        # The selected polygon must not be overwritten by the source eight's
+        # global constant-depth configuration during PhysicsCurriculumEnv.reset.
+        pass
 
     def step(self, action):
         obs, reward, terminated, truncated, info = super().step(action)

@@ -10,7 +10,7 @@ import webbrowser
 from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
 
 from ...configuration import read_yaml
-from .status import training_phase
+from .status import training_phase, execution_status
 from .progress import training_progress
 
 
@@ -70,7 +70,9 @@ class TrainingData:
         runtime = read_yaml(phase_path) if phase_path.is_file() else None
         phase, sea, boundaries = training_phase(config, latest, runtime)
         manifest = self.run / 'manifest.yaml'
-        status = read_yaml(manifest).get('status', 'unknown') if manifest.is_file() else 'unknown'
+        manifest_data = read_yaml(manifest) if manifest.is_file() else {}
+        execution = execution_status(runtime, manifest_data)
+        status = execution['state']
         now = time.time()
         progress = training_progress(config, latest, timestamps.items(), self.started_at,
                                      now, status)
@@ -78,7 +80,7 @@ class TrainingData:
             planned = runtime['planned_timesteps']
             phase_steps = runtime.get('phase_steps', 0)
             phase_end = runtime.get('updated_at', timestamps.get(latest, now)) if runtime.get('status') in {
-                'completed', 'early_stopped', 'failed', 'interrupted'} else now
+                'completed', 'exposure_completed', 'early_stopped', 'failed', 'interrupted'} else now
             phase_elapsed = max(0., phase_end - runtime.get('started_at', phase_end))
             speed = progress['steps_per_second']
             remaining = ((planned - phase_steps) / speed if speed and not progress['stale']
@@ -90,6 +92,7 @@ class TrainingData:
                                          estimated_total_seconds=phase_elapsed + remaining
                                          if remaining is not None else None)
         self.cached = dict(run=self.run.name, step=latest, phase=phase, sea=sea,
+                           execution=execution,
                            curriculum=runtime,
                            boundaries=boundaries, series=series, status=status,
                            refresh_seconds=self.interval,

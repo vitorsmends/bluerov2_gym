@@ -210,6 +210,27 @@ está em [Treinamento de trajetória de referência](docs/trajectory_training_re
 O currículo segue disponível como padrão **para station keeping**, assim como
 o experimento sem currículo. Eles não são substitutos deste treino de trajetória.
 
+## Currículo com consolidação e exposição a todos os níveis de ondas
+
+O perfil `progressive_wave_exposure.yaml` começa do zero e mantém as 16 fases
+físicas. Exige três janelas aprovadas, sem sobreposição, para registrar domínio.
+A paciência é de 30 avaliações sem progresso, após dez de aquecimento.
+Estagnação permite avançar para ganhar experiência nos níveis seguintes,
+registrando a fase como **não dominada**. A primeira fase continua protegida
+contra parada durante a aquisição inicial. Nas fases com ondas, o monitor
+pode ativar mesmo sem sucesso, permitindo seguir aos níveis mais difíceis.
+Concluir a exposição aos 16 níveis não equivale a dominar todos eles; o painel
+informa as fases não dominadas e o estado final `exposure_completed`.
+
+```bash
+bluerov train --config configs/training/progressive_wave_exposure.yaml \
+  --output artifacts/training/progressive_wave_exposure
+
+python -m bluerov2_gym.workflows.plotting.training.browser \
+  --run artifacts/training/progressive_wave_exposure \
+  --host 0.0.0.0 --port 51348 --no-open
+```
+
 ## Treinar o currículo progressivo do zero em outro computador
 
 A configuração portátil contém as 16 fases, ações com alocação conhecida,

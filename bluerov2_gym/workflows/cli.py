@@ -93,13 +93,14 @@ def train(args):
         config['paths']['model_dir']=str(run/'models')
         write_yaml(run/'config.resolved.yaml',config)
         try:
+            training_result = None
             with log_to(run/'logs/training.log'):
                 if task=='trajectory_curriculum_legacy':
                     from .training.trajectory_curriculum_legacy import train_trajectory_curriculum
                     train_trajectory_curriculum(config)
                 elif task in {'trajectory_curriculum', 'trajectory_finetune'}:
                     from .training.trajectory_curriculum import train_trajectory_curriculum
-                    train_trajectory_curriculum(config)
+                    training_result = train_trajectory_curriculum(config)
                 elif task=='trajectory_tracking':
                     from .training.trajectory import train_trajectory
                     train_trajectory(config)
@@ -114,7 +115,8 @@ def train(args):
             if manifests:
                 effective=read_yaml(manifests[0])
                 write_yaml(run/'config.resolved.yaml',effective['config'])
-            update_manifest(run,status='completed',training_seed=seed,ablation=args.ablation)
+            update_manifest(run,status=(training_result or {}).get('status', 'completed'),
+                            training_seed=seed,ablation=args.ablation)
         except CurriculumEarlyStopped as error:
             update_manifest(run,status='early_stopped',reason=str(error),training_seed=seed)
             print(f'Early stopping: {error}')

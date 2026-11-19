@@ -18,6 +18,7 @@ from tqdm.auto import tqdm
 from .curriculum_context import PhysicsCurriculumEnv, sample_context
 from .curriculum_resume import load_resume, restore_rng
 from .progress_plateau import update_progress
+from .curriculum_progression import credit_window, plateau_advances, completion_status
 from .device import resolve_training_device, report_training_device
 from .mastery import CurriculumEarlyStopped
 from .metrics import PositionErrorCallback
@@ -85,11 +86,15 @@ def validate_config(config):
         raise ValueError('Unknown plateau monitor.')
     if not 0 <= plateau.get('min_success_delta', .025) <= 1:
         raise ValueError('Invalid plateau success delta.')
+    if not 0 <= plateau.get('activation_success_rate', 0.) <= 1:
+        raise ValueError('Invalid plateau activation success rate.')
     if plateau.get('enabled') and (plateau['patience_evaluations'] < 1 or
                                   plateau['warmup_evaluations'] < 0 or plateau['min_delta_m'] < 0):
         raise ValueError('Invalid optional plateau settings.')
     for i, stage in enumerate(stages):
         phase_eval, phase_gate = phase_settings(config, i)
+        if phase_gate.get('on_plateau', 'stop') not in {'stop', 'advance'}:
+            raise ValueError('on_plateau must be stop or advance.')
         window = phase_gate.get('rolling_batches', 1)
         if not isinstance(window, int) or isinstance(window, bool) or window < 1:
             raise ValueError('rolling_batches must be a positive integer.')
@@ -125,7 +130,12 @@ def batch_result(episodes, settings):
     rates = {str(g): float(np.mean([e['success'] for e in episodes if e['group'] == g])) for g in groups}
     rate = float(np.mean([e['success'] for e in episodes]))
     rmse = [e['rmse_m'] for e in episodes if e['rmse_m'] is not None]
-    return dict(success_rate=rate, group_success_rates=rates,
+    extra = {}
+    for field, name in [('yaw_mae_deg', 'mean_yaw_mae_deg'), ('corner_rmse_m', 'mean_corner_rmse_m')]:
+        values = [e[field] for e in episodes if e.get(field) is not None and math.isfinite(e[field])]
+        if values:
+            extra[name] = float(np.mean(values))
+    return dict(success_rate=rate, group_success_rates=rates, **extra,
                 mean_rmse_m=float(np.mean(rmse)) if rmse else None,
                 passed=bool(rate >= settings['min_batch_success_rate'] and
                             all(r >= settings['min_group_success_rate'] for r in rates.values())),
@@ -175,6 +185,9 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                 options = {'curriculum_context': context}
                 if config['training'].get('task') == 'trajectory_finetune':
                     options['assessment'] = True
+                    from .finetune_polygon import trajectory_specs
+                    options['trajectory_index'] = (episode // evaluation['groups']) % len(
+                        trajectory_specs(config['finetuning'], assessment=True))
                 obs, _ = env.reset(seed=reset_seed, options=options)
                 errors, rewards, saturated = [], [], []
                 yaw_errors, corner_errors = [], []
@@ -309,6 +322,14 @@ def train_trajectory_curriculum(config):
             model.tensorboard_log = paths['tensorboard_log']
             pretrained_timesteps = model.num_timesteps
             model.num_timesteps = 0  # Fine-tuning logs count additional interactions only.
+            overrides = config['finetuning'].get('optimizer_overrides', {})
+            for key, value in overrides.items():
+                setattr(model, key, value)
+            if 'learning_rate' in overrides:
+                from stable_baselines3.common.utils import FloatSchedule
+                model.lr_schedule = FloatSchedule(overrides['learning_rate'])
+                for group in model.policy.optimizer.param_groups:
+                    group['lr'] = overrides['learning_rate']
             print(f'Fine-tuning {warm_start["model"]}; optimizer and normalization retained.', flush=True)
         else:
             model = PPO(policy, env, seed=seed, device=device,
@@ -362,7 +383,11 @@ def train_trajectory_curriculum(config):
             report()
             best_rmse, stale = None, 0
             progress = {}
+            phase_plateau = dict(config.get('plateau_early_stopping', {}),
+                                 **stage.get('plateau_early_stopping', {}))
             recent_batches = []  # Reassess a full window after any resume.
+            local_evaluations = 0
+            advanced_for_exposure = False
             bar = PhaseProgress(status['planned_timesteps'], status['start_step'], stage['name'], report)
             while status['successful_batches'] < settings['consecutive_batches']:
                 # Each call returns after complete rollout optimization. Nothing
@@ -383,11 +408,15 @@ def train_trajectory_curriculum(config):
                            if mastery else {'passed': False}))
                     result['passed'] = bool(mastery and mastery['passed'])
                 status['evaluations'] += 1
+                local_evaluations += 1
                 status['validation_timesteps'] += sum(e['steps'] for e in result['episodes'])
-                status['successful_batches'] = status['successful_batches'] + 1 if result['passed'] else 0
+                status['successful_batches'] = credit_window(
+                    status['successful_batches'], result['passed'], local_evaluations, settings)
+                status['mastery_evidence'] = ('nonoverlapping_windows' if settings.get('nonoverlapping_windows')
+                                            else 'consecutive_assessments')
                 status['last_evaluation'] = {k: v for k, v in result.items() if k != 'episodes'}
                 rmse = result['mean_rmse_m']
-                plateau = config.get('plateau_early_stopping', {})
+                plateau = phase_plateau
                 if plateau.get('monitor') == 'mastery_progress':
                     progress = update_progress(progress, result, plateau)
                     stale = progress.get('stale', 0)
@@ -415,6 +444,13 @@ def train_trajectory_curriculum(config):
                       f"batches={status['successful_batches']}/{settings['consecutive_batches']}", flush=True)
                 if (plateau.get('enabled') and stale >= plateau['patience_evaluations'] and
                         status['successful_batches'] < settings['consecutive_batches']):
+                    if plateau_advances(settings):
+                        advanced_for_exposure = True
+                        status['transition_reason'] = (
+                            f'Exposure advancement after {stale} checks without progress; '
+                            'mastery criteria NOT satisfied.')
+                        print('[CURRICULUM] ' + status['transition_reason'], flush=True)
+                        break
                     status['status'] = 'early_stopped'
                     status['stop_reason'] = ('Validation stagnation: '
                                              f'{stale} assessments without meaningful progress '
@@ -424,16 +460,21 @@ def train_trajectory_curriculum(config):
                     raise CurriculumEarlyStopped('Independent validation stagnated; curriculum is incomplete.')
             bar.bar.close()
             bar = None
-            status.update(status='mastered', end_step=model.num_timesteps)
+            status.update(status='advanced_on_plateau' if advanced_for_exposure else 'mastered',
+                          mastered=not advanced_for_exposure, end_step=model.num_timesteps)
             report()
             history.append(deepcopy(status))
             report()
             save_pair(f'_stage_{index+1}')
-        status['status'] = 'completed'
+        status['status'] = completion_status(history)
+        status['unmastered_stages'] = [s['index'] for s in history if s['status'] != 'mastered']
+        if status['status'] == 'exposure_completed':
+            status['stop_reason'] = 'All stages visited; some stages advanced on plateau without mastery.'
         report()
         save_pair('')
         write_yaml(metadata_path, dict(metadata, actual_timesteps=model.num_timesteps,
                                       validation_timesteps=sum(s['validation_timesteps'] for s in history)))
+        return dict(status=status['status'], unmastered_stages=status['unmastered_stages'])
     except KeyboardInterrupt:
         if model is not None:
             status['status'] = 'interrupted'

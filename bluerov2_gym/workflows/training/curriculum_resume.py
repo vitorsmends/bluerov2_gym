@@ -22,8 +22,8 @@ def load_resume(config):
     for key in ['ppo', 'vecnormalize', 'environment']:
         if old[key] != config[key]:
             raise ValueError(f'Resume cannot change {key}; only evaluation/transition criteria may change.')
-    old_stages = [{k: v for k, v in s.items() if k not in {'evaluation', 'transition'}} for s in old['curriculum']]
-    new_stages = [{k: v for k, v in s.items() if k not in {'evaluation', 'transition'}} for s in config['curriculum']]
+    old_stages = [{k: v for k, v in s.items() if k not in {'evaluation', 'transition', 'plateau_early_stopping'}} for s in old['curriculum']]
+    new_stages = [{k: v for k, v in s.items() if k not in {'evaluation', 'transition', 'plateau_early_stopping'}} for s in config['curriculum']]
     if old_stages != new_stages or old['training'].get('seed') != config['training'].get('seed'):
         raise ValueError('Resume must preserve physical stages and training seed.')
     model_name = old['paths']['model_name']
@@ -39,9 +39,9 @@ def load_resume(config):
         with path.open('rb') as stream:
             state = pickle.load(stream)  # Locally generated trusted run artifacts.
         status = state['status']
-        if status.get('status') == 'completed':
+        if status.get('status') in {'completed', 'exposure_completed'}:
             raise ValueError('The source curriculum already completed.')
-        index = status['index'] if status.get('status') == 'mastered' else status['index'] - 1
+        index = status['index'] if status.get('status') in {'mastered', 'advanced_on_plateau'} else status['index'] - 1
         if index >= len(config['curriculum']):
             raise ValueError('The source has already mastered all phases.')
         return dict(model=str(model), normalizer=str(normalizer), state=state,

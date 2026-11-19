@@ -2,7 +2,7 @@
 import math
 
 
-FINISHED = {'completed', 'failed', 'interrupted', 'early_stopped'}
+FINISHED = {'exposure_completed', 'completed', 'failed', 'interrupted', 'early_stopped'}
 
 
 def training_progress(config, step, samples, started_at, now, status):

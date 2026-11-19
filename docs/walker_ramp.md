@@ -142,3 +142,18 @@ Retomadas iniciam um novo monitor e uma nova janela de avaliação.
 Perfis sem esse monitor mantêm a parada anterior por RMSE.
 Este ajuste não modifica retroativamente as execuções salvas nem reinicia
 automaticamente uma execução encerrada.
+
+### Proteção da aquisição inicial
+
+O monitor só é ativado quando uma janela completa apresenta pelo menos 50%
+de episódios aprovados e RMSE finito (`activation_success_rate: 0.5`). Esse
+limiar é uma escolha experimental de ativação, não o critério de domínio.
+Até então, a paciência permanece zerada. Depois de ativado, regressões também
+consomem paciência; não o desativam. A aprovação continua exigindo 90% global
+e por caso. Sem teto de passos, uma fase que nunca atinja a ativação não será
+encerrada automaticamente por esse monitor e deve ser acompanhada no painel.
+
+Essa proteção foi introduzida após verificar que o treino novo e o anterior
+tinham pesos e estado do otimizador idênticos aos 194.560 passos, mas o novo
+foi interrompido antes da fase que o anterior dominou aos 501.760 passos.
+A continuação preserva o checkpoint e inicia nova janela e monitor.

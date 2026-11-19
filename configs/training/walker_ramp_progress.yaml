@@ -205,6 +205,7 @@ plateau_early_stopping:
   min_delta_m: 0.005
   monitor: mastery_progress
   min_success_delta: 0.025
+  activation_success_rate: 0.5
 curriculum:
 - name: A - preparacao simplificada sem ondas
   mechanics_model: std

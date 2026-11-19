@@ -27,7 +27,7 @@ class CurriculumFigures:
         if not self.phases or self.phases[-1]['index'] != self.status.get('index'):
             self.phases.append(self.status)
         self.phases = [s for s in self.phases if 'start_step' in s]
-        self.colors = plt.get_cmap('tab10').colors
+        self.colors = plt.get_cmap('tab10' if len(self.phases) <= 10 else 'tab20', max(10, len(self.phases))).colors
         self.window = int(settings.get('smooth_window', 10))
         if self.window < 1:
             raise ValueError('smooth_window must be positive.')
