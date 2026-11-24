@@ -7,7 +7,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import TwoSlopeNorm
-from .finetune_controller_comparison import ROOT
+ROOT = Path(__file__).resolve().parents[3]
 from bluerov2_gym.envs.core.dynamics import Dynamics
 
 

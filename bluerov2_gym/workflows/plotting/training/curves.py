@@ -11,6 +11,8 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 
 METRICS = (
+    ("rollout/yaw_error_mean_deg", "Mean absolute yaw error per rollout", "Yaw MAE (deg)", "yaw_error_mean", "#B07AA1"),
+    ("rollout/yaw_error_rmse_deg", "Yaw RMSE per rollout", "Yaw RMSE (deg)", "yaw_error_rmse", "#E15759"),
     ("rollout/ep_rew_mean", "Mean episode reward", "Episode reward", "episode_reward", "#59A14F"),
     ('rollout/reward_mean_per_step', 'Mean raw reward per step', 'Reward per step', 'step_reward', '#59A14F'),
     ("rollout/ep_len_mean", "Mean episode length", "Steps per episode", "episode_length", "#4E79A7"),

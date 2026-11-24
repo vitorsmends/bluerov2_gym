@@ -8,7 +8,7 @@ FINISHED = {'exposure_completed', 'completed', 'failed', 'interrupted', 'early_s
 def training_progress(config, step, samples, started_at, now, status):
     training = config.get('training', {})
     lessons = config.get('curriculum', [])
-    by_success = (training.get('task') in {'trajectory_curriculum', 'trajectory_curriculum_legacy'} or
+    by_success = (training.get('task') in {'trajectory_curriculum', 'trajectory_curriculum_legacy', 'stationkeeping_physics_curriculum'} or
                   config.get('curriculum_transition', {}).get('mode') == 'success')
     quantum = max(1, int(config.get('ppo', {}).get('n_steps', 1)))
     target = None

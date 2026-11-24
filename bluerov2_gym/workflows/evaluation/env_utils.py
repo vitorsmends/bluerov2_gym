@@ -75,7 +75,7 @@ def tracking_errors(state: np.ndarray, reference: np.ndarray) -> dict:
     }
 
 
-OBSERVATION_ADAPTERS = ('legacy', 'legacy_yaw_error', 'goal_frame')
+OBSERVATION_ADAPTERS = ('legacy', 'legacy_yaw_error', 'goal_frame', 'stationkeeping')
 
 
 def body_to_world_rotation(roll, pitch, yaw):
@@ -102,6 +102,9 @@ def build_tracking_observation(obs: dict, reference: np.ndarray, adapter='legacy
     convention. A moving reference additionally introduces acceleration and
     rotating-frame effects; this adapter is not a proof of dynamics equivalence.
     """
+    if adapter == 'stationkeeping':
+        from ..training.stationkeeping_yaw import stationkeeping_observation
+        return stationkeeping_observation(obs, reference)
     if adapter in {'legacy', 'legacy_yaw_error'}:
         virtual = build_legacy_tracking_observation(obs, reference)
         if adapter == 'legacy_yaw_error':

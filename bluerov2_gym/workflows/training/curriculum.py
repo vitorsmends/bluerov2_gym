@@ -495,6 +495,7 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
         phase_status = dict(index=index + 1, name=lesson['name'],
                             start_step=phase_start, step=phase_start,
                             status='training', mode=transition_mode,
+                            yaw_tolerance_deg=transition.get('yaw_tolerance_deg'),
                             successful_episodes=0,
                             required_episodes=int(transition.get('consecutive_episodes', 3)))
         write_phase_status(phase_status)
@@ -518,14 +519,17 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
                                     completed_episodes=value.episodes)
                 write_phase_status(phase_status)
             mastery = StationkeepingMasteryCallback(
-                float(radius), hold_steps, phase_status['required_episodes'], report_mastery)
+                float(radius), hold_steps, phase_status['required_episodes'], report_mastery,
+                yaw_tolerance_deg=transition.get('yaw_tolerance_deg'))
             callbacks.append(mastery)
             early_config = transition.get('early_stopping', {})
             if early_config.get('enabled', False):
                 def report_plateau(value, improved):
                     phase_status.update(step=model.num_timesteps,
                                         stale_windows=value.stale_windows,
-                                        best_error_m=value.best_error_m)
+                                        monitored_metric=value.metric_key)
+                    score_name = ("best_error_m" if value.metric_key == "metrics/position_error_euclidean" else "best_score")
+                    phase_status[score_name] = value.best_error_m
                     if improved:
                         model.save(str(model_dir / f'{model_path.name}_phase_{index+1}_best'))
                         env.save(str(model_dir / f'{vecnorm_path.stem}_phase_{index+1}_best.pkl'))
@@ -533,12 +537,16 @@ def train_model_with_curriculum(config_path=None, seed=None, separate_run=False,
                 early_stopping = PlateauEarlyStoppingCallback(
                     window_episodes=early_config.get('window_episodes', 20),
                     patience_windows=early_config.get('patience_windows', 10),
-                    min_delta_m=early_config.get('min_delta_m', .01),
+                    min_delta_m=early_config.get('min_delta', early_config.get('min_delta_m', .01)),
                     warmup_episodes=early_config.get('warmup_episodes', 40),
-                    report=report_plateau)
+                    report=report_plateau,
+                    metric_key=early_config.get("metric_key", "metrics/position_error_euclidean"))
                 callbacks.append(early_stopping)
             print(f'[CURRICULUM] Advance only after {mastery.required_episodes} consecutive '
-                  f'episodes with final {hold_steps} steps below {radius} m. '
+                  f'episodes with final {hold_steps} steps below {radius} m'
+                  + (f' and yaw below {transition["yaw_tolerance_deg"]} deg'
+                     if transition.get('yaw_tolerance_deg') is not None else '')
+                  + '. '
                   'No phase step limit.', flush=True)
         callback = CallbackList(callbacks)
         model.learn(

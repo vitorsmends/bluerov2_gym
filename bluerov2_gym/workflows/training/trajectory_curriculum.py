@@ -18,7 +18,7 @@ from tqdm.auto import tqdm
 from .curriculum_context import PhysicsCurriculumEnv, sample_context
 from .curriculum_resume import load_resume, restore_rng
 from .progress_plateau import update_progress
-from .curriculum_progression import credit_window, plateau_advances, completion_status
+from .curriculum_progression import credit_window, plateau_advances, completion_status, early_skip_reason
 from .device import resolve_training_device, report_training_device
 from .mastery import CurriculumEarlyStopped
 from .metrics import PositionErrorCallback
@@ -53,6 +53,12 @@ def validate_config(config):
     if config['training'].get('task') == 'trajectory_finetune':
         from .finetune_polygon import validate_finetuning
         validate_finetuning(config)
+    skipping = config.get('early_phase_skipping', {})
+    if skipping.get('enabled'):
+        for key in ['first_stage', 'min_evaluations', 'patience_evaluations']:
+            value = skipping.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+                raise ValueError(f'Invalid early_phase_skipping.{key}.')
     stages, settings = config.get('curriculum', []), config['curriculum_transition']
     evaluation = config['evaluation']
     if not stages or settings.get('mode') != 'success':
@@ -143,6 +149,9 @@ def batch_result(episodes, settings):
 
 
 def curriculum_env(config, seed):
+    if config['training'].get('task') == 'stationkeeping_physics_curriculum':
+        from .stationkeeping_physics_curriculum import StationkeepingPhysicsEnv
+        return StationkeepingPhysicsEnv(config, seed)
     if config['training'].get('task') == 'trajectory_finetune':
         from .finetune_polygon import FineTuningEnv
         return FineTuningEnv(config, seed)
@@ -183,6 +192,8 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                 reset_seed = int(rng.integers(2**31, 2**32))
                 np.random.seed(reset_seed)
                 options = {'curriculum_context': context}
+                if config['training'].get('task') == 'stationkeeping_physics_curriculum':
+                    options['assessment'] = True
                 if config['training'].get('task') == 'trajectory_finetune':
                     options['assessment'] = True
                     from .finetune_polygon import trajectory_specs
@@ -210,6 +221,9 @@ def evaluate_stage(model, normalizer, config, index, batch_index):
                               mean_reward_raw=float(np.mean(rewards))
                               if np.all(np.isfinite(rewards)) else None,
                               thruster_saturation_fraction=float(np.mean(saturated)))
+                if config['training'].get('task') == 'stationkeeping_physics_curriculum':
+                    result['yaw_mae_deg'] = float(np.mean(yaw_errors)) if yaw_errors else None
+                    result['yaw_rmse_deg'] = float(np.sqrt(np.mean(np.square(yaw_errors)))) if yaw_errors else None
                 if config['training'].get('task') == 'trajectory_finetune':
                     yaw_mae = float(np.mean(yaw_errors)) if yaw_errors else float('inf')
                     corner_rmse = float(np.sqrt(np.mean(np.square(corner_errors)))) if corner_errors else None
@@ -335,7 +349,8 @@ def train_trajectory_curriculum(config):
             model = PPO(policy, env, seed=seed, device=device,
                         tensorboard_log=paths['tensorboard_log'], **params)
         metadata = dict(config=config, task=config['training']['task'], execution_device=device,
-                        observation_adapter=('legacy_yaw_error' if base.yaw_feedback else 'legacy'), policy_kwargs=model.policy_kwargs,
+                        observation_adapter=config['environment'].get('observation_adapter',
+                            'legacy_yaw_error' if base.yaw_feedback else 'legacy'), policy_kwargs=model.policy_kwargs,
                         policy_architecture=str(model.policy),
                         effective_episode_limit=getattr(base, 'episode_steps', None))
         if warm_start:
@@ -383,6 +398,10 @@ def train_trajectory_curriculum(config):
             report()
             best_rmse, stale = None, 0
             progress = {}
+            if (resume and index == resume['index']
+                    and config['training'].get('preserve_progress_on_resume', False)
+                    and resume['status']['index'] == index+1):
+                progress = deepcopy(resume['status'].get('progress_monitor', {}))
             phase_plateau = dict(config.get('plateau_early_stopping', {}),
                                  **stage.get('plateau_early_stopping', {}))
             recent_batches = []  # Reassess a full window after any resume.
@@ -428,6 +447,14 @@ def train_trajectory_curriculum(config):
                     elif status['evaluations'] > plateau.get('warmup_evaluations', 5):
                         stale += 1
                 status['stale_evaluations'] = stale
+                skip_settings = config.get('early_phase_skipping', {})
+                if skip_settings.get('enabled'):
+                    status['early_phase_skipping'] = dict(
+                        protected=index+1 < skip_settings['first_stage'],
+                        min_evaluations=skip_settings['min_evaluations'],
+                        patience_evaluations=skip_settings['patience_evaluations'],
+                        stale_evaluations=stale)
+                skip_reason = early_skip_reason(status, skip_settings)
                 report()
                 suffix = f'_stage_{index+1}_eval_{model.num_timesteps}'
                 pair = save_pair(suffix)
@@ -437,11 +464,18 @@ def train_trajectory_curriculum(config):
                 model.logger.record('curriculum/successful_batches', status['successful_batches'])
                 if rmse is not None:
                     model.logger.record('curriculum/evaluation_rmse_m', rmse)
+                if result.get('mean_yaw_mae_deg') is not None:
+                    model.logger.record('curriculum/evaluation_yaw_mae_deg', result['mean_yaw_mae_deg'])
                 model.logger.dump(model.num_timesteps)
                 print(f"[CURRICULUM] {index+1}/{len(config['curriculum'])} {stage['name']} | "
                       f"phase_steps={status['phase_steps']} (planned={status['planned_timesteps']}, extensible) | "
                       f"validation={result['success_rate']:.0%} | "
                       f"batches={status['successful_batches']}/{settings['consecutive_batches']}", flush=True)
+                if skip_reason and status['successful_batches'] < settings['consecutive_batches']:
+                    advanced_for_exposure = True
+                    status['transition_reason'] = skip_reason
+                    print('[CURRICULUM] ' + skip_reason, flush=True)
+                    break
                 if (plateau.get('enabled') and stale >= plateau['patience_evaluations'] and
                         status['successful_batches'] < settings['consecutive_batches']):
                     if plateau_advances(settings):

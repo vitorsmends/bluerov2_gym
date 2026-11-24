@@ -161,7 +161,8 @@ def compute_case_metrics(data):
 
         pos_error = g["position_error_m"].to_numpy(dtype=float)
         track_error = g["tracking_error_m"].to_numpy(dtype=float)
-        yaw_error = np.abs(g["yaw_error"].to_numpy(dtype=float))
+        yaw_raw = g["yaw_error"].to_numpy(dtype=float)
+        yaw_error = np.abs(np.arctan2(np.sin(yaw_raw), np.cos(yaw_raw)))
         effort = g["control_effort"].to_numpy(dtype=float)
         norm_effort = g["control_effort_normalized"].to_numpy(dtype=float)
         power = g["total_power_W"].to_numpy(dtype=float)
@@ -187,6 +188,8 @@ def compute_case_metrics(data):
             "rmse_tracking_error_m": float(np.sqrt(np.nanmean(track_error ** 2))),
 
             "mean_abs_yaw_error_rad": float(np.nanmean(yaw_error)),
+            "yaw_mae_deg": float(np.rad2deg(np.nanmean(yaw_error))),
+            "yaw_rmse_deg": float(np.rad2deg(np.sqrt(np.nanmean(yaw_error**2)))),
             "p95_abs_yaw_error_rad": float(np.nanpercentile(yaw_error, 95)),
             "max_abs_yaw_error_rad": float(np.nanmax(yaw_error)),
 
@@ -221,6 +224,8 @@ def build_summary(case_df):
         "max_position_error_m",
         "final_position_error_m",
         "mean_abs_yaw_error_rad",
+        "yaw_mae_deg",
+        "yaw_rmse_deg",
         "p95_abs_yaw_error_rad",
         "mean_control_effort",
         "total_control_effort",
@@ -292,6 +297,8 @@ def build_summary_by_sea(case_df):
     metric_cols = [
         "rmse_position_error_m",
         "mean_abs_yaw_error_rad",
+        "yaw_mae_deg",
+        "yaw_rmse_deg",
         "mean_control_effort",
         "mean_power_W",
         "total_energy_J",
@@ -358,7 +365,8 @@ def plot_error_time_by_sea(data):
 
 def plot_yaw_error_time_by_sea(data):
     data = data.copy()
-    data["abs_yaw_error"] = np.abs(data["yaw_error"])
+    yaw = data["yaw_error"].to_numpy(dtype=float)
+    data["abs_yaw_error"] = np.rad2deg(np.abs(np.arctan2(np.sin(yaw), np.cos(yaw))))
 
     for sea, sea_df in data.groupby("sea_scenario"):
         plt.figure(figsize=(6.5, 4.2))
@@ -390,7 +398,7 @@ def plot_yaw_error_time_by_sea(data):
             )
 
         plt.xlabel("Time [s]")
-        plt.ylabel("Absolute Yaw Error [rad]")
+        plt.ylabel("Absolute yaw error [deg]")
         # plt.title(f"Yaw Holding Error - {sea}")
         plt.grid(True, linestyle="--", alpha=0.5)
         plt.legend(frameon=True)
@@ -722,6 +730,8 @@ def main(settings=None):
 
     plot_error_time_by_sea(data)
     plot_yaw_error_time_by_sea(data)
+    plot_boxplot(case_df, metric="yaw_rmse_deg", ylabel="Yaw RMSE [deg]",
+                 filename="boxplot_yaw_rmse_by_controller", by="controller")
     plot_effort_time_by_sea(data)
     plot_power_time_by_sea(data)
 
@@ -735,8 +745,8 @@ def main(settings=None):
 
     plot_boxplot(
         case_df,
-        metric="mean_abs_yaw_error_rad",
-        ylabel="Mean Absolute Yaw Error [rad]",
+        metric="yaw_mae_deg",
+        ylabel="Mean absolute yaw error [deg]",
         filename="boxplot_yaw_error_by_controller",
         by="controller",
     )

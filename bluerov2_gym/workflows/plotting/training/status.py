@@ -64,6 +64,10 @@ def training_phase(config, step, runtime=None):
             sea = merge(sea, context.get('jonswap', {}))
             if context.get('sea_case'):
                 label += f' — {context["sea_case"]}'
+            skip = runtime.get('early_phase_skipping', {})
+            if skip:
+                label += (' — early skipping protegido' if skip.get('protected') else
+                          f' — early skipping: {skip.get("stale_evaluations", 0)}/{skip.get("patience_evaluations", 10)} sem melhora')
             skipped = [h['index'] for h in runtime.get('history', []) if h.get('status') == 'advanced_on_plateau']
             if skipped:
                 label += ' — fases sem domínio: ' + ', '.join(map(str, skipped))

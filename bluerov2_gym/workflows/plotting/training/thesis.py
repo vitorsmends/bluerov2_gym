@@ -22,6 +22,8 @@ class CurriculumFigures:
         self.output.mkdir(parents=True, exist_ok=True)
         self.tables.mkdir(parents=True, exist_ok=True)
         _, self.metrics = find_run(Path(settings['log_dir']), settings.get('run'))
+        self.lineage = settings.get('training_config', {}).get('lineage_view', {})
+        self.resume_steps = self.lineage.get('resume_steps', [])
         self.status = settings.get('curriculum_status', {})
         self.phases = list(self.status.get('history', []))
         if not self.phases or self.phases[-1]['index'] != self.status.get('index'):
@@ -38,6 +40,23 @@ class CurriculumFigures:
         self.batches.sort(key=lambda b: b['step'])
 
     def save(self, fig, name):
+        if self.settings.get('language') == 'en':
+            from matplotlib.text import Text
+            labels = {
+                'Reward bruto médio por passo':'Mean step reward',
+                'Erro euclidiano médio (m)':'Mean error (m)',
+                'RMSE por rollout (m)':'Position RMSE (m)',
+                'Passos de treinamento no ambiente':'PPO environment steps',
+                'Métrica não registrada':'Metric not recorded',
+                'Episódios aprovados (%)':'Successful episodes (%)',
+                'Média do RMSE dos episódios (m)':'Position RMSE (m)',
+                'Erro de yaw no treino (graus)':'Yaw error (deg)',
+                'MAE de yaw na avaliação (graus)':'Yaw MAE (deg)',
+                'Treino':'Training', 'Validação':'Assessment', 'Fase':'Stage',
+                'Interações com o simulador':'Simulator interactions',
+            }
+            for text in fig.findobj(match=Text):
+                text.set_text(labels.get(text.get_text(), text.get_text()))
         for suffix in ['pdf', 'png']:
             fig.savefig(self.output/f'{name}.{suffix}', dpi=300, bbox_inches='tight')
         plt.close(fig)
@@ -51,9 +70,15 @@ class CurriculumFigures:
                     ax.axvline(phase['start_step'], color='.45', lw=.65, ls=':')
             ax.grid(alpha=.2)
             ax.xaxis.set_major_formatter(EngFormatter())
+            for step in self.resume_steps:
+                ax.axvline(step, color='black', lw=.85, ls='--', alpha=.6)
         handles = [Patch(color=self.colors[i], alpha=.5, label=p['name'].split(' - ')[0])
                    for i, p in enumerate(self.phases)]
-        np.asarray(axes).reshape(-1)[0].legend(handles=handles, loc='upper right', ncol=6, fontsize=8)
+        np.asarray(axes).reshape(-1)[0].legend(handles=handles, loc='lower center', bbox_to_anchor=(.5, 1.09), ncol=8, fontsize=self.settings.get('legend_font_size', 8))
+        for i, step in enumerate(self.resume_steps, 1):
+            np.asarray(axes).reshape(-1)[0].text(step, 1.015, f'R{i}',
+                transform=np.asarray(axes).reshape(-1)[0].get_xaxis_transform(),
+                ha='center', va='bottom', fontsize=self.settings.get('legend_font_size', 8))
 
     def learning(self):
         specifications = [('rollout/reward_mean_per_step', 'Reward bruto médio por passo', '#29996a'),
@@ -70,10 +95,12 @@ class CurriculumFigures:
             # Never average data from different mechanics/sea stages together.
             for phase in self.phases:
                 end = phase.get('end_step', phase.get('step', np.inf))
-                mask = (steps > phase['start_step']) & (steps <= end)
-                if mask.any():
-                    y = moving_average(values[mask], self.window)
-                    ax.plot(steps[mask][-len(y):], y, color=color, lw=1.25)
+                cuts = [phase['start_step']] + [p for p in self.resume_steps if phase['start_step'] < p < end] + [end]
+                for lo, hi in zip(cuts, cuts[1:]):
+                    mask = (steps > lo) & (steps <= hi)
+                    if mask.any():
+                        y = moving_average(values[mask], self.window)
+                        ax.plot(steps[mask][-len(y):], y, color=color, lw=1.25)
         self.decorate(axes)
         axes[-1].set_xlabel('Passos de treinamento no ambiente')
         self.save(fig, 'curriculum_learning')
@@ -97,6 +124,29 @@ class CurriculumFigures:
         axes[-1].set_xlabel('Passos de treinamento no ambiente')
         self.decorate(axes)
         self.save(fig, 'curriculum_validation')
+
+    def yaw(self):
+        tags = [('rollout/yaw_error_mean_deg', 'MAE', '#B07AA1'),
+                ('rollout/yaw_error_rmse_deg', 'RMSE', '#E15759')]
+        if not any(tag in self.metrics for tag, _, _ in tags):
+            return
+        fig, axes = plt.subplots(2, 1, figsize=(7.2, 5.8), sharex=True, layout='constrained')
+        for tag, label, color in tags:
+            if tag in self.metrics:
+                steps, values = self.metrics[tag]
+                axes[0].plot(steps, values, lw=.9, color=color, label=label)
+        axes[0].set_ylabel('Erro de yaw no treino (graus)')
+        rows = [b for b in self.batches if b.get('mean_yaw_mae_deg') is not None]
+        axes[1].plot([b['step'] for b in rows], [b['mean_yaw_mae_deg'] for b in rows],
+                     color='#B07AA1', lw=.9)
+        axes[1].set_ylabel('MAE de yaw na avaliação (graus)')
+        axes[1].set_xlabel('Passos de treinamento no ambiente')
+        self.decorate(axes)
+        phase_legend = axes[0].get_legend()
+        axes[0].add_artist(phase_legend)
+        axes[0].legend(handles=axes[0].lines[:2], labels=['MAE', 'RMSE'],
+                       loc='upper right', fontsize=8, frameon=False)
+        self.save(fig, 'curriculum_yaw')
 
     def costs_and_tables(self):
         phases = []
@@ -129,9 +179,11 @@ class CurriculumFigures:
         sources = [self.root/'config.resolved.yaml', self.root/'manifest.yaml', self.root/'models/curriculum_status.yaml']
         sources += list((self.root/'logs/curriculum_evaluations').glob('*.yaml'))
         sources += list((self.root/'logs/tensorboard').rglob('events.out.tfevents.*'))
+        if self.lineage:
+            sources.append(self.root/'lineage.json')
         (self.tables/'provenance.json').write_text(json.dumps(dict(run=str(self.root), smoothing_window=self.window,
             input_sha256={str(p.relative_to(self.root)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sources if p.is_file()}), indent=2))
-        (self.output/'captions.md').write_text('''Figuras de uma execução de treinamento, seed 42; sem média entre seeds de PPO.
+        (self.output/'captions.md').write_text('''Figuras de uma política de treinamento, seed 42; sem média entre seeds de PPO.
 
 curriculum_learning: reward bruto e erros de posição por rollout. Traços claros:
 valores registrados; traços fortes: média móvel de até 10 registros, separada
@@ -145,6 +197,23 @@ contêm RMSE incluindo o transitório. Sucesso não é uma estimativa entre agen
 curriculum_sample_cost: passos de atualização e de validação por fase, separados.
 A contagem global do PPO não inclui as interações adicionais de validação.
 ''')
+        if self.lineage:
+            with (self.output/'captions.md').open('a') as stream:
+                stream.write('\nHistórico reconstruído da linhagem de checkpoints; R1, R2, ... marcam retomadas.\nSomente trechos que levaram à política final são incluídos; tentativas descartadas\nnão foram concatenadas. Não representa uma execução sem interrupções. A suavização\nnão cruza mudanças de fase ou retomadas. CSVs e lineage.json preservam a procedência.\nAs regras de progressão foram alteradas entre segmentos; consultar os YAMLs fontes.\n')
+
+        if self.settings.get('language') == 'en':
+            (self.output/'captions.md').write_text("""Checkpoint-lineage reconstruction for one PPO policy (training seed 42).
+
+curriculum_learning: recorded raw reward per step, mean position error and position RMSE per rollout. Pale curves are logged values; solid curves are moving averages of up to 10 records, computed separately within each stage and retained run segment.
+
+curriculum_validation: deterministic independent assessments with frozen normalization, 100 s horizons and 10 s settling excluded from mastery metrics. Stars indicate assessment batches/windows approved under the configured group criteria, not mastery of a stage by one batch alone.
+
+curriculum_yaw: training rollout MAE and RMSE (top), and mean independent-assessment yaw MAE after settling (bottom), in degrees. Yaw is penalized in the reward but is not an additional stage-mastery condition.
+
+curriculum_sample_cost: retained training and assessment interactions by stage. Discarded branches and time spent during interruptions are not included.
+
+R1/R2 mark checkpoint resumptions. Only the ancestry producing the final policy is retained; no interpolation or claim of an uninterrupted training run is made. Progression criteria changed between retained segments. Consult lineage.json and source configuration files for provenance.
+""")
 
     def csv(self, name, rows):
         if not rows:
@@ -154,8 +223,8 @@ A contagem global do PPO não inclui as interações adicionais de validação.
             writer.writeheader(); writer.writerows(rows)
 
     def generate(self):
-        with plt.rc_context({'font.family':'serif', 'font.size':10, 'pdf.fonttype':42, 'ps.fonttype':42}):
-            self.learning(); self.validation(); self.costs_and_tables()
+        with plt.rc_context({'font.family':'serif', 'font.size':self.settings.get('font_size', 10), 'pdf.fonttype':42, 'ps.fonttype':42}):
+            self.learning(); self.validation(); self.yaw(); self.costs_and_tables()
 
 
 def main(settings=None):

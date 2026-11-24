@@ -173,6 +173,9 @@ class ExperimentRunner:
                         seed = int(sea_params.get("seed", 42)) + rep
                         position = np.asarray(target["pos"], dtype=float)
                         yaw_rad = np.deg2rad(float(target["yaw_deg"]))
+                        print(f'[RUN] {name.upper()} | {sea_name} | target={target["id"]} | '
+                              f'repetition={rep+1}/{repetitions} | steps={steps}', flush=True)
+                        episode_started = time.monotonic()
                         reference = StationKeepingReference(position, yaw_rad)
                         env = self._make_env(output_dir)
                         obs = _reset_with_jonswap(env, sea_params, seed)
@@ -215,6 +218,9 @@ class ExperimentRunner:
                             stop_reason='environment_termination' if terminated else
                                 'time_limit' if truncated else 'requested_horizon'))
                         env.close()
+                        print(f'[DONE] {name.upper()} | {sea_name} | target={target["id"]} | '
+                              f'repetition={rep+1}/{repetitions} | steps={k+1}/{steps} | '
+                              f'elapsed={time.monotonic()-episode_started:.1f}s', flush=True)
             output = output_dir / f"{name}_stationkeeping.csv"
             with output.open("w", newline="") as stream:
                 writer = csv.writer(stream); writer.writerow(STATIONKEEPING_HEADER); writer.writerows(rows)

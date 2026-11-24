@@ -62,6 +62,13 @@ def resolve(path):
                             params['action_control'] != trained['action_control']):
                         raise ValueError('Evaluation action_control differs from training.')
                     params['action_control'] = deepcopy(trained['action_control'])
+        if trained.get('observation_adapter') == 'stationkeeping':
+            for controller in config.get('controllers', []):
+                if controller.get('name') == 'ppo':
+                    params = controller.setdefault('params', {})
+                    if params.get('observation_adapter', 'stationkeeping') != 'stationkeeping':
+                        raise ValueError('Stationkeeping evaluation observation differs from training.')
+                    params['observation_adapter'] = 'stationkeeping'
         if trained.get('yaw_tracking', {}).get('relative_observation', False):
             for controller in config.get('controllers', []):
                 if controller.get('name') == 'ppo':

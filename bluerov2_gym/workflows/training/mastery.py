@@ -12,11 +12,13 @@ class CurriculumEarlyStopped(RuntimeError):
 class PlateauEarlyStoppingCallback(BaseCallback):
     """Optional stop after consecutive episode windows without error improvement."""
     def __init__(self, window_episodes=20, patience_windows=10,
-                 min_delta_m=.01, warmup_episodes=40, report=None):
+                 min_delta_m=.01, warmup_episodes=40, report=None,
+                 metric_key="metrics/position_error_euclidean"):
         super().__init__()
         if (window_episodes < 1 or patience_windows < 1 or warmup_episodes < 0
                 or not math.isfinite(min_delta_m) or min_delta_m < 0):
             raise ValueError('Invalid early stopping window, patience, warmup or minimum improvement.')
+        self.metric_key = metric_key
         self.window_episodes = int(window_episodes)
         self.patience_windows = int(patience_windows)
         self.min_delta_m = float(min_delta_m)
@@ -35,7 +37,7 @@ class PlateauEarlyStoppingCallback(BaseCallback):
 
     def _on_step(self):
         for index, (info, done) in enumerate(zip(self.locals['infos'], self.locals['dones'])):
-            error = info.get('metrics/position_error_euclidean')
+            error = info.get(self.metric_key)
             if error is None or not math.isfinite(error):
                 self.valid[index] = False
             else:
@@ -60,7 +62,9 @@ class PlateauEarlyStoppingCallback(BaseCallback):
             else:
                 self.stale_windows += 1
             self.stopped = self.stale_windows >= self.patience_windows
-            self.logger.record('curriculum/early_stopping_error_mean_m', error_mean)
+            self.logger.record('curriculum/early_stopping_error_mean_m'
+                               if self.metric_key == 'metrics/position_error_euclidean'
+                               else 'curriculum/early_stopping_score', error_mean)
             self.logger.record('curriculum/early_stopping_stale_windows', self.stale_windows)
             if self.report:
                 self.report(self, improved)
@@ -70,10 +74,15 @@ class PlateauEarlyStoppingCallback(BaseCallback):
 
 
 class StationkeepingMasteryCallback(BaseCallback):
-    def __init__(self, radius_m, hold_steps, consecutive_episodes, report=None):
+    def __init__(self, radius_m, hold_steps, consecutive_episodes, report=None,
+                 yaw_tolerance_deg=None):
         super().__init__()
         if not math.isfinite(radius_m) or radius_m <= 0 or hold_steps < 1 or consecutive_episodes < 1:
             raise ValueError('Mastery radius, hold steps and episode count must be positive.')
+        if yaw_tolerance_deg is not None and (not math.isfinite(yaw_tolerance_deg) or yaw_tolerance_deg <= 0):
+            raise ValueError('Yaw tolerance must be finite and positive.')
+        self.yaw_tolerance_rad = (None if yaw_tolerance_deg is None
+                                  else math.radians(yaw_tolerance_deg))
         self.radius_m = float(radius_m)
         self.hold_steps = int(hold_steps)
         self.required_episodes = int(consecutive_episodes)
@@ -89,6 +98,9 @@ class StationkeepingMasteryCallback(BaseCallback):
         for index, (info, done) in enumerate(zip(self.locals['infos'], self.locals['dones'])):
             error = info.get('metrics/position_error_euclidean')
             valid = error is not None and math.isfinite(error) and error < self.radius_m
+            if self.yaw_tolerance_rad is not None:
+                yaw = info.get('metrics/yaw_error_rad')
+                valid = valid and yaw is not None and math.isfinite(yaw) and abs(yaw) < self.yaw_tolerance_rad
             self.tails[index].append(valid)
             if not done:
                 continue

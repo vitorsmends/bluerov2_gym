@@ -30,6 +30,17 @@ def load_resume(config):
     norm_name = Path(old['paths']['vecnormalize_name']).stem
     candidates = sorted((run/'models').glob(f'{model_name}*_curriculum_state.pkl'),
                         key=lambda p: p.stat().st_mtime, reverse=True)
+    selected = config['training'].get('resume_checkpoint')
+    if selected:
+        if Path(selected).name != selected:
+            raise ValueError('resume_checkpoint must be a filename within source models/.')
+        stem = selected.removesuffix('.zip')
+        if not stem.startswith(model_name):
+            raise ValueError('resume_checkpoint does not match the source model name.')
+        chosen = run/'models'/f'{stem}_curriculum_state.pkl'
+        if not chosen.is_file():
+            raise FileNotFoundError(f'No state snapshot for selected checkpoint: {chosen}')
+        candidates = [chosen]
     for path in candidates:
         stem = path.name.removesuffix('_curriculum_state.pkl')
         model = path.with_name(stem + '.zip')
