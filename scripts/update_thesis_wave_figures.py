@@ -1,6 +1,6 @@
 """Regenerate Chapter 2 wave illustrations from the current recorded W1 contract."""
 from pathlib import Path
-import importlib.util,sys,json,shutil
+import importlib.util,sys,json,shutil,hashlib
 import yaml,numpy as np
 ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from bluerov2_gym.envs.core.dynamics import Dynamics
@@ -19,6 +19,11 @@ def main():
     emitted=module.generate(source,'walker_w1',42,output)
     target=ROOT/'documents/msc_thesis/images/path_tracking/chapter2_wave';target.mkdir(exist_ok=True,parents=True)
     for image in emitted:shutil.copy2(image,target/image.name)
+    provenance_path=output/'provenance.json';provenance=json.loads(provenance_path.read_text())
+    provenance['source_sha256']['scripts/update_thesis_wave_figures.py']=hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+    for image in emitted:provenance['output_sha256'][image.name]=hashlib.sha256(image.read_bytes()).hexdigest()
+    provenance_path.write_text(json.dumps(provenance,indent=2)+'\n')
+    shutil.copy2(provenance_path,target/'provenance.json')
     generate(source/'config.resolved.yaml','walker_w1')
     cfg=yaml.safe_load((source/'config.resolved.yaml').read_text());params=cfg['disturbance']['scenarios']['walker_w1']
     model=Dynamics(jonswap_params=params,dynamics_config=cfg['environment']['dynamics_config'])

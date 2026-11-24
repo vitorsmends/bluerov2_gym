@@ -787,3 +787,17 @@ compatibilidade; o artigo atual permanece intacto. As figuras novas ficam em
 `artifacts/evaluation/finetune_article_campaign/article_candidate/`.
 Para executar cada etapa separadamente e entender a comparação dos modelos, veja
 [docs/finetune_evaluation.md](docs/finetune_evaluation.md).
+
+### Station keeping com o currículo de física e ondas do artigo
+
+A campanha da tese usa os mesmos 16 estágios e o mesmo motor de avaliação
+independente, transferência mecânica e avanço por estagnação do artigo.
+Mantém o PPO de station keeping (256×256, seis ações diretas), com penalização
+angular `0.5 |wrap(e_yaw)|`. Os resultados históricos são preservados.
+
+```bash
+bluerov train --config configs/training/stationkeeping_waves_yaw.yaml \
+  --output artifacts/training/stationkeeping_physics_curriculum_from_scratch
+```
+
+Treino, GUI, critérios de avanço e avaliação: [guia da campanha](docs/stationkeeping_waves_yaw.md).
